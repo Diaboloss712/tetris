@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>테트리스 배틀 - 멀티플레이어</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- 로비 화면 -->
+    <div id="lobby-screen" class="screen active">
+        <div class="container">
+            <h1 class="title">🎮 테트리스 배틀</h1>
+            <p class="subtitle">친구들과 함께 실시간 대전!</p>
+            
+            <div class="status" id="connection-status">연결 중...</div>
+            
+            <div class="form-group">
+                <label for="player-name">플레이어 이름</label>
+                <input type="text" id="player-name" placeholder="이름을 입력하세요" maxlength="15" value="플레이어">
+            </div>
+            
+            <div class="button-group">
+                <button id="create-room-btn" class="btn btn-primary">방 만들기</button>
+                <button id="refresh-rooms-btn" class="btn btn-secondary">새로고침</button>
+            </div>
+            
+            <div class="rooms-container">
+                <h3>사용 가능한 방</h3>
+                <div id="rooms-list" class="rooms-list">
+                    <p class="empty-message">방을 불러오는 중...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 방 생성 모달 -->
+    <div id="create-room-modal" class="modal">
+        <div class="modal-content">
+            <h2>방 만들기</h2>
+            <div class="form-group">
+                <label for="room-name">방 이름</label>
+                <input type="text" id="room-name" placeholder="방 이름을 입력하세요" maxlength="20" value="내 방">
+            </div>
+            <div class="button-group">
+                <button id="confirm-create-room" class="btn btn-primary">생성</button>
+                <button id="cancel-create-room" class="btn btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 대기실 화면 -->
+    <div id="room-screen" class="screen">
+        <div class="container">
+            <h2 id="room-title">대기실</h2>
+            <div class="room-info">
+                <span id="room-player-count">플레이어: 0/4</span>
+            </div>
+            
+            <div class="players-container">
+                <h3>플레이어 목록</h3>
+                <div id="players-list" class="players-list"></div>
+            </div>
+            
+            <div class="button-group">
+                <button id="ready-btn" class="btn btn-primary">준비</button>
+                <button id="leave-room-btn" class="btn btn-secondary">방 나가기</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 게임 화면 -->
+    <div id="game-screen" class="screen">
+        <div class="game-container">
+            <div class="game-sidebar left-sidebar">
+                <h3>Hold (C키)</h3>
+                <canvas id="hold-piece-canvas" width="120" height="120"></canvas>
+                
+                <h3 style="margin-top: 20px;">다음 블록</h3>
+                <canvas id="next-piece-canvas" width="120" height="120"></canvas>
+                
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="stat-label">점수</span>
+                        <span class="stat-value" id="score">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">레벨</span>
+                        <span class="stat-value" id="level">1</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">라인</span>
+                        <span class="stat-value" id="lines">0</span>
+                    </div>
+                </div>
+                
+                <div class="attack-info">
+                    <div class="combo" id="combo-display" style="display: none;">
+                        콤보: <span id="combo-value">0</span>x
+                    </div>
+                    <div class="b2b" id="b2b-display" style="display: none;">
+                        B2B: <span id="b2b-value">0</span>
+                    </div>
+                    <div class="garbage-warning" id="garbage-display" style="display: none;">
+                        ⚠️ 받을 공격: <span id="garbage-value">0</span>줄
+                    </div>
+                </div>
+                
+                <div class="stats">
+                    <div class="stat-item attack">
+                        <span class="stat-label">공격</span>
+                        <span class="stat-value" id="attack-sent">0</span>
+                    </div>
+                    <div class="stat-item defense">
+                        <span class="stat-label">받음</span>
+                        <span class="stat-value" id="attack-received">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="game-main">
+                <canvas id="game-canvas" width="300" height="600"></canvas>
+                <div id="game-over-overlay" class="game-over-overlay" style="display: none;">
+                    <h2>게임 오버!</h2>
+                    <p>점수: <span id="final-score">0</span></p>
+                    <button id="return-lobby-btn" class="btn btn-primary">로비로 돌아가기</button>
+                </div>
+            </div>
+            
+            <div class="game-sidebar right-sidebar">
+                <h3>플레이어</h3>
+                <div id="game-players-list" class="game-players-list"></div>
+                
+                <div class="controls-help">
+                    <h4>조작법</h4>
+                    <div class="control-item">← →: 이동</div>
+                    <div class="control-item">↓: 소프트 드롭</div>
+                    <div class="control-item">↑ / X: 시계방향 회전</div>
+                    <div class="control-item">Z / Ctrl: 반시계방향</div>
+                    <div class="control-item">C / Shift: Hold</div>
+                    <div class="control-item">스페이스: 하드 드롭</div>
+                    <div class="control-item" style="margin-top: 10px; color: #ff00ff; font-weight: bold;">✨ 모든 기능 구현!</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/game.js"></script>
+    <script src="/static/lobby.js"></script>
+    <script src="/static/main.js"></script>
+</body>
+</html>
