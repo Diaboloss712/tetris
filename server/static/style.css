@@ -14,7 +14,7 @@ body {
 }
 
 .screen {
-    display: none !important;
+    display: none;
     position: fixed;
     top: 0;
     left: 0;
@@ -26,17 +26,13 @@ body {
 }
 
 .screen.active {
-    display: flex !important;
+    display: flex;
     align-items: center;
     justify-content: center;
 }
 
-#game-screen {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
 #game-screen.active {
-    display: block !important;
+    display: block;
 }
 
 .container {
