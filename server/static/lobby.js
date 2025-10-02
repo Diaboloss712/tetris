@@ -314,7 +314,12 @@ class LobbyManager {
     }
     
     updateOtherPlayersGrids(gameState) {
-        if (!this.currentRoom || !gameState.game_states) return;
+        if (!this.currentRoom || !gameState.game_states) {
+            console.log('❌ updateOtherPlayersGrids: no room or game_states');
+            return;
+        }
+
+        console.log('📡 게임 상태 업데이트:', Object.keys(gameState.game_states).length, '명의 플레이어');
 
         // 다른 플레이어들의 미니 그리드 및 점수 업데이트 (자신은 제외)
         for (const playerId in gameState.game_states) {
@@ -322,12 +327,18 @@ class LobbyManager {
             const scoreEl = document.querySelector(`#player-${playerId} .player-score`);
             if (scoreEl) scoreEl.textContent = state.score || 0;
 
-            if (playerId === this.playerId) continue; // 자신은 건너뛰기
+            if (playerId === this.playerId) {
+                console.log('⏭️ 자신 건너뛰기:', playerId);
+                continue; // 자신은 건너뛰기
+            }
             
             const canvas = document.getElementById(`grid-${playerId}`);
             if (canvas) {
+                console.log('🎨 미니 그리드 그리기:', playerId, 'score:', state.score);
                 const ctx = canvas.getContext('2d');
                 this.drawGame(ctx, state, canvas.width, canvas.height, true);
+            } else {
+                console.log('❌ 캔버스 없음:', `grid-${playerId}`);
             }
         }
     }
@@ -451,8 +462,8 @@ class LobbyManager {
         this.myGameOverSent = false; // 게임 오버 플래그 초기화
         this.deadPlayers = new Set(); // 죽은 플레이어 초기화
 
-        // 멀티플레이에서도 로컬 게임 실행 (각 클라이언트가 독립적으로 실행)
-        window.game = new TetrisGame('game-canvas');
+        // 멀티플레이에서는 autoStart=false로 생성 (수동으로 게임 루프 시작)
+        window.game = new TetrisGame('game-canvas', false);
         window.game.itemMode = itemMode;
 
         document.getElementById('items-section').style.display = itemMode ? 'block' : 'none';
@@ -463,8 +474,9 @@ class LobbyManager {
         this.setupKeyboardControls();
         
         // 주기적으로 게임 상태를 서버로 전송 (다른 플레이어에게 보여주기 위해)
+        let syncCounter = 0;
         this.syncInterval = setInterval(() => {
-            if (window.game && !window.game.gameOver && !this.isSoloMode) {
+            if (window.game && !window.game.gameOver) {
                 this.send({
                     type: 'update_grid',
                     grid: window.game.grid,
@@ -472,18 +484,26 @@ class LobbyManager {
                     level: window.game.level,
                     lines: window.game.lines
                 });
-            }
-        }, 100); // 100ms마다 동기화
-        
-        // 게임 루프 시작
-        const gameLoop = (timestamp) => {
-            if (!window.game.gameOver && !this.isSoloMode) {
-                window.game.update(timestamp);
-                requestAnimationFrame(gameLoop);
-            } else if (window.game.gameOver && !this.myGameOverSent) {
+                // 10번에 한번만 로그 (1초마다)
+                if (++syncCounter % 10 === 0) {
+                    console.log('📤 게임 상태 전송:', window.game.score, '점');
+                }
+            } else if (window.game && window.game.gameOver && !this.myGameOverSent) {
                 this.myGameOverSent = true;
                 clearInterval(this.syncInterval); // 동기화 중지
+                console.log('💀 게임 오버 감지!');
                 this.handleGameOver();
+            }
+        }, 100); // 100ms마다 동기화 및 게임 오버 체크
+        
+        // 게임 루프 시작 (멀티플레이 전용)
+        console.log('🎮 멀티플레이 게임 루프 시작!');
+        const gameLoop = (timestamp) => {
+            if (!window.game.gameOver) {
+                window.game.update(timestamp);
+                requestAnimationFrame(gameLoop);
+            } else {
+                console.log('🛑 게임 루프 종료 (게임 오버)');
             }
         };
         requestAnimationFrame(gameLoop);

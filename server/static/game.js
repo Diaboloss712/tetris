@@ -1,11 +1,12 @@
 // 테트리스 게임 로직
 class TetrisGame {
-    constructor(canvasId) {
+    constructor(canvasId, autoStart = true) {
         this.canvas = document.getElementById(canvasId);
         this.ctx = this.canvas.getContext('2d');
         this.blockSize = 30;
         this.cols = 10;
         this.rows = 20;
+        this.autoStart = autoStart;
         
         // 게임 상태
         this.grid = Array(this.rows).fill().map(() => Array(this.cols).fill(0));
@@ -86,8 +87,10 @@ class TetrisGame {
         this.drawNextPiece();
         this.drawHeldPiece();
         
-        // 게임 루프 시작
-        this.startGameLoop();
+        // 자동 시작이 활성화된 경우에만 게임 루프 시작
+        if (this.autoStart) {
+            this.startGameLoop();
+        }
     }
     
     startGameLoop() {
@@ -545,11 +548,20 @@ class TetrisGame {
         const numLines = linesToClear.length;
         
         if (numLines > 0) {
-            // 라인 제거
-            linesToClear.reverse().forEach(line => {
-                this.grid.splice(line, 1);
-                this.grid.unshift(Array(this.cols).fill(0));
-            });
+            // 라인 제거: 클리어되지 않은 줄만 유지
+            const newGrid = [];
+            for (let y = 0; y < this.rows; y++) {
+                if (!linesToClear.includes(y)) {
+                    newGrid.push(this.grid[y]);
+                }
+            }
+            
+            // 제거된 줄 수만큼 위에 빈 줄 추가
+            for (let i = 0; i < numLines; i++) {
+                newGrid.unshift(Array(this.cols).fill(0));
+            }
+            
+            this.grid = newGrid;
             
             // Perfect Clear 체크
             const isPerfectClear = this.checkPerfectClear();
@@ -1196,14 +1208,7 @@ class TetrisGame {
     }
     
     update(timestamp) {
-        if (this.gameOver) {
-            // 멀티플레이에서 게임 오버 시 서버에 알림
-            if (window.lobbyManager && !window.lobbyManager.isSoloMode && !this.gameOverSent) {
-                this.gameOverSent = true;
-                window.lobbyManager.handleGameOver();
-            }
-            return;
-        }
+        if (this.gameOver) return;
         
         const deltaTime = timestamp - this.lastFallTime;
         
