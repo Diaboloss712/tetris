@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 import uvicorn
 from datetime import datetime
 from pathlib import Path
+from game import TetrisGame
 
 app = FastAPI()
 
@@ -30,8 +31,7 @@ class Room:
         self.max_players = max_players
         self.item_mode = item_mode  # 아이템 모드
         self.players: Dict[str, Dict] = {}
-        self.grids: Dict[str, List[List[int]]] = {}
-        self.scores: Dict[str, int] = {}
+        self.games: Dict[str, TetrisGame] = {}
         self.game_active = False
         self.created_at = datetime.now()
 
@@ -39,15 +39,13 @@ class Room:
         if len(self.players) >= self.max_players:
             return False
         self.players[player_id] = {"name": name, "ready": False}
-        self.scores[player_id] = 0
-        self.grids[player_id] = [[0 for _ in range(10)] for _ in range(20)]
         return True
 
     def remove_player(self, player_id: str):
         if player_id in self.players:
             del self.players[player_id]
-            del self.scores[player_id]
-            del self.grids[player_id]
+            if player_id in self.games:
+                del self.games[player_id]
             
             # Transfer host if host left
             if player_id == self.host_id and len(self.players) > 0:
@@ -65,8 +63,7 @@ class Room:
     def start_game(self):
         self.game_active = True
         for player_id in self.players:
-            self.scores[player_id] = 0
-            self.grids[player_id] = [[0 for _ in range(10)] for _ in range(20)]
+            self.games[player_id] = TetrisGame()
             self.players[player_id]["ready"] = False
 
     def get_room_info(self) -> dict:
@@ -83,11 +80,22 @@ class Room:
         }
 
     def get_game_state(self) -> dict:
+        game_states = {}
+        for player_id, game in self.games.items():
+            game_states[player_id] = {
+                'grid': game.grid,
+                'score': game.score,
+                'level': game.level,
+                'lines_cleared': game.lines_cleared,
+                'game_over': game.game_over,
+                'current_piece': game.current_piece,
+                'next_piece': game.next_piece
+            }
         return {
-            "players": [{"id": pid, "name": data["name"], "score": self.scores[pid], "ready": data["ready"]} 
+            "players": [{"id": pid, "name": data["name"], "score": self.games[pid].score, "ready": data["ready"]} 
                        for pid, data in self.players.items()],
             "game_active": self.game_active,
-            "grids": self.grids
+            "game_states": game_states
         }
 
 class LobbyManager:
@@ -361,6 +369,32 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             "grid": my_grid
                         })
                         
+            elif message["type"] == "game_input":
+                room = lobby_manager.get_room_by_player(client_id)
+                if room and room.game_active and client_id in room.games:
+                    game = room.games[client_id]
+                    input_type = message.get("input")
+
+                    if input_type == 'left':
+                        game.move_left()
+                    elif input_type == 'right':
+                        game.move_right()
+                    elif input_type == 'down':
+                        game.move_down()
+                    elif input_type == 'rotate_cw':
+                        game.rotate(clockwise=True)
+                    elif input_type == 'rotate_ccw':
+                        game.rotate(clockwise=False)
+                    elif input_type == 'hold':
+                        game.hold_piece()
+                    elif input_type == 'hard_drop':
+                        game.hard_drop()
+
+                    await manager.broadcast_to_room(room.room_id, {
+                        "type": "game_state_update",
+                        "game_state": room.get_game_state()
+                    })
+
             elif message["type"] == "game_over":
                 # Player lost
                 room = lobby_manager.get_room_by_player(client_id)

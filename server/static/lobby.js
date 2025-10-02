@@ -7,7 +7,8 @@ class LobbyManager {
         this.currentRoom = null;
         this.rooms = [];
         this.connected = false;
-        
+        this.colors = ['#00ffff', '#ffff00', '#ff00ff', '#ff9900', '#0000ff', '#00ff00', '#ff0000'];
+
         // 타겟팅 시스템
         this.currentTarget = null;
         this.availableTargets = [];
@@ -15,6 +16,13 @@ class LobbyManager {
         // 싱글플레이 모드
         this.isSoloMode = false;
         this.soloItemMode = false;
+
+        // DAS/ARR for smooth movement
+        this.dasDelay = 160; // ms
+        this.arrRate = 30; // ms
+        this.dasTimeout = null;
+        this.arrInterval = null;
+        this.keysDown = {};
         
         this.initElements();
         this.initEventListeners();
@@ -106,8 +114,12 @@ class LobbyManager {
                 this.requestRoomList();
                 break;
             case 'game_start':
-                const itemMode = data.item_mode || false;
-                this.startGame(itemMode);
+                this.startGame(data.game_state, data.item_mode);
+                break;
+            case 'game_state_update':
+                if (this.currentRoom && !this.isSoloMode) {
+                    this.updateAllGames(data.game_state);
+                }
                 break;
             case 'receive_attack':
                 if (window.game) {
@@ -291,6 +303,105 @@ class LobbyManager {
         });
     }
     
+    updateAllGames(gameState) {
+        if (!this.currentRoom || !gameState.game_states) return;
+
+        // 메인 캔버스 (자신) 업데이트
+        const myState = gameState.game_states[this.playerId];
+        if (myState) {
+            const mainCanvas = document.getElementById('game-canvas');
+            const mainCtx = mainCanvas.getContext('2d');
+            this.drawGame(mainCtx, myState, mainCanvas.width, mainCanvas.height);
+            
+            document.getElementById('score').textContent = myState.score;
+            document.getElementById('level').textContent = myState.level;
+            document.getElementById('lines').textContent = myState.lines_cleared;
+
+            const nextCanvas = document.getElementById('next-canvas');
+            const nextCtx = nextCanvas.getContext('2d');
+            this.drawNextOrHeld(nextCtx, myState.next_piece);
+
+            const holdCanvas = document.getElementById('hold-canvas');
+            const holdCtx = holdCanvas.getContext('2d');
+            this.drawNextOrHeld(holdCtx, myState.held_piece);
+        }
+
+        // 다른 플레이어들의 미니 그리드 및 점수 업데이트
+        for (const playerId in gameState.game_states) {
+            const state = gameState.game_states[playerId];
+            const scoreEl = document.querySelector(`#player-${playerId} .player-score`);
+            if (scoreEl) scoreEl.textContent = state.score;
+
+            if (playerId === this.playerId) continue;
+            
+            const canvas = document.getElementById(`grid-${playerId}`);
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                this.drawGame(ctx, state, canvas.width, canvas.height, true);
+            }
+        }
+    }
+
+    drawGame(ctx, state, width, height, isMini = false) {
+        const TILE_SIZE = width / 10;
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, width, height);
+        ctx.strokeStyle = isMini ? 'transparent' : '#555';
+
+        if (state.grid) {
+            for (let r = 0; r < 20; r++) {
+                for (let c = 0; c < 10; c++) {
+                    if (state.grid[r][c]) {
+                        ctx.fillStyle = this.colors[state.grid[r][c] - 1];
+                        ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        if (!isMini) ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            }
+        }
+
+        if (state.current_piece && state.current_piece.shape) {
+            ctx.fillStyle = state.current_piece.color;
+            state.current_piece.shape.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value) {
+                        const drawX = (state.current_piece.x + x) * TILE_SIZE;
+                        const drawY = (state.current_piece.y + y) * TILE_SIZE;
+                        ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+                        if (!isMini) ctx.strokeRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+                    }
+                });
+            });
+        }
+    }
+
+    drawNextOrHeld(ctx, piece) {
+        const TILE_SIZE = ctx.canvas.width / 4;
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+        if (!piece || !piece.shape) return;
+
+        ctx.fillStyle = piece.color;
+        ctx.strokeStyle = '#555';
+        const shape = piece.shape;
+        const shapeWidth = shape[0].length;
+        const shapeHeight = shape.length;
+        const startX = (4 - shapeWidth) / 2;
+        const startY = (4 - shapeHeight) / 2;
+
+        shape.forEach((row, y) => {
+            row.forEach((value, x) => {
+                if (value) {
+                    ctx.fillRect((startX + x) * TILE_SIZE, (startY + y) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeRect((startX + x) * TILE_SIZE, (startY + y) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            });
+        });
+    }
+
     updateRoomUI() {
         
         document.getElementById('room-title').textContent = this.currentRoom.room_name;
@@ -343,142 +454,145 @@ class LobbyManager {
         this.gameScreen.classList.add('active');
     }
     
-    startGame(itemMode = false) {
+    startGame(initialGameState, itemMode = false) {
         console.log('게임 시작!' + (itemMode ? ' (아이템 모드)' : ''));
         this.showGameScreen();
-        
-        // 게임 초기화
-        window.game = new TetrisGame('game-canvas');
-        window.game.itemMode = itemMode;
-        
-        // 아이템 UI 표시
-        const itemsSection = document.getElementById('items-section');
-        if (itemMode && itemsSection) {
-            itemsSection.style.display = 'block';
-        }
-        
-        // 게임 루프
-        const gameLoop = (timestamp) => {
-            if (!window.game.gameOver) {
-                window.game.update(timestamp);
-                requestAnimationFrame(gameLoop);
-            } else {
-                this.handleGameOver();
-            }
-        };
-        
-        requestAnimationFrame(gameLoop);
-        
-        // 키보드 이벤트
-        this.setupKeyboardControls();
-        
+        this.isSoloMode = false; // 멀티플레이 게임 시작
+
+        window.game = { itemMode: itemMode }; // 로컬 게임 로직 실행 방지
+
+        document.getElementById('items-section').style.display = itemMode ? 'block' : 'none';
+        document.getElementById('current-target-display').style.display = 'block';
+        document.getElementById('game-players-list').style.display = 'flex';
+
         this.updateGamePlayersList();
+        if (initialGameState) {
+            this.updateAllGames(initialGameState);
+        }
+        this.setupKeyboardControls();
     }
     
     setupKeyboardControls() {
-        // 키보드 이벤트 (싱글/멀티 공통)
-        document.addEventListener('keydown', (e) => {
-            if (!window.game || window.game.gameOver) return;
-            
-            switch(e.key) {
-                case 'ArrowLeft':
-                    window.game.moveLeft();
-                    break;
-                case 'ArrowRight':
-                    window.game.moveRight();
-                    break;
-                case 'ArrowDown':
-                    window.game.moveDown();
-                    break;
-                case 'ArrowUp':
-                case 'x':
-                case 'X':
-                    window.game.rotate(true); // CW
-                    break;
-                case 'z':
-                case 'Z':
-                case 'Control':
-                    e.preventDefault();
-                    window.game.rotate(false); // CCW
-                    break;
-                case 'c':
-                case 'C':
-                case 'Shift':
-                    e.preventDefault();
-                    window.game.holdPiece();
-                    break;
-                case ' ':
-                    e.preventDefault();
-                    const attackLines = window.game.hardDrop();
-                    if (!this.isSoloMode && attackLines > 0 && this.currentTarget) {
-                        this.send({
-                            type: 'attack',
-                            target_id: this.currentTarget,
-                            lines: attackLines,
-                            combo: window.game.combo
-                        });
-                    }
-                    break;
-                case 'Tab':
-                    if (!this.isSoloMode) {
-                        e.preventDefault();
-                        this.switchTarget();
-                    }
-                    break;
-                case 'Alt':
-                    e.preventDefault();
-                    if (window.game.itemMode) {
-                        if (window.game.ghostMode) {
-                            window.game.fixGhostBlock();
-                        } else {
-                            window.game.useItem();
-                        }
-                    }
-                    break;
+        // 기존 리스너 제거 (중복 방지)
+        document.removeEventListener('keydown', this.keydownHandler);
+        document.removeEventListener('keyup', this.keyupHandler);
+
+        this.keydownHandler = (e) => {
+            if (!window.game || window.game.gameOver || this.keysDown[e.key]) return;
+            this.keysDown[e.key] = true;
+
+            const handleMove = (direction) => {
+                this.sendGameInput(direction);
+                clearTimeout(this.dasTimeout);
+                this.dasTimeout = setTimeout(() => {
+                    this.arrInterval = setInterval(() => {
+                        this.sendGameInput(direction);
+                    }, this.arrRate);
+                }, this.dasDelay);
+            };
+
+            switch (e.key) {
+                case 'ArrowLeft': handleMove('left'); break;
+                case 'ArrowRight': handleMove('right'); break;
+                case 'ArrowDown': this.sendGameInput('down'); break;
+                case 'ArrowUp': case 'x': case 'X': this.sendGameInput('rotate_cw'); break;
+                case 'z': case 'Z': case 'Control': e.preventDefault(); this.sendGameInput('rotate_ccw'); break;
+                case 'c': case 'C': case 'Shift': e.preventDefault(); this.sendGameInput('hold'); break;
+                case ' ': e.preventDefault(); this.sendGameInput('hard_drop'); break;
+                case 'Tab': if (!this.isSoloMode) { e.preventDefault(); this.switchTarget(); } break;
+                case 'Alt': e.preventDefault(); /* 아이템 로직 */ break;
             }
-            
-            window.game.draw();
-        });
+        };
+
+        this.keyupHandler = (e) => {
+            this.keysDown[e.key] = false;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                clearTimeout(this.dasTimeout);
+                clearInterval(this.arrInterval);
+            }
+        };
+
+        document.addEventListener('keydown', this.keydownHandler);
+        document.addEventListener('keyup', this.keyupHandler);
     }
-    
-    updateGamePlayersList() {
-        // 게임 중 플레이어 목록 업데이트
-        if (!this.currentRoom) return;
-        
-        const list = document.getElementById('game-players-list');
-        list.innerHTML = '';
-        
-        // 사용 가능한 타겟 업데이트 (자신 제외)
-        this.availableTargets = this.currentRoom.players
-            .filter(p => p.id !== this.playerId)
-            .map(p => p.id);
-        
-        // 현재 타겟이 없거나 유효하지 않으면 첫 번째 타겟으로 설정
-        if (!this.currentTarget || !this.availableTargets.includes(this.currentTarget)) {
-            this.currentTarget = this.availableTargets[0] || null;
-        }
-        
-        this.currentRoom.players.forEach(player => {
-            const item = document.createElement('div');
-            item.className = 'game-player-item';
-            if (player.id === this.playerId) {
-                item.classList.add('me');
-            } else {
-                // 타겟 표시
-                if (player.id === this.currentTarget) {
-                    item.classList.add('targeted');
-                }
-                // 클릭으로 타겟 변경
-                item.onclick = () => {
-                    this.setTarget(player.id);
-                };
+
+    sendGameInput(input) {
+        if (this.isSoloMode) {
+            switch (input) {
+                case 'left': window.game.moveLeft(); break;
+                case 'right': window.game.moveRight(); break;
+                case 'down': window.game.moveDown(); break;
+                case 'rotate_cw': window.game.rotate(true); break;
+                case 'rotate_ccw': window.game.rotate(false); break;
+                case 'hold': window.game.holdPiece(); break;
+                case 'hard_drop': window.game.hardDrop(); break;
             }
-            
-            item.textContent = player.name + (player.id === this.playerId ? ' (나)' : '');
-            list.appendChild(item);
+        } else {
+            this.send({ type: 'game_input', input: input });
+        }
+    }
+            if (!window.game || window.game.gameOver) return;
+
+            let action = null;
+
+            // Tab, Alt 키는 게임 플레이와 별도로 처리
+            if (e.key === 'Tab') {
+                if (!this.isSoloMode) {
+                    e.preventDefault();
+                    this.switchTarget();
+                }
+                return;
+            }
+            if (e.key === 'Alt') {
+                e.preventDefault();
+                if (window.game.itemMode) {
+                    if (window.game.ghostMode) {
+                        window.game.toggleGhostMode();
+                    } else {
+                        this.useItem();
+                    }
+                }
+                return;
+            }
+
+            // 게임 플레이 관련 키 처리
+            const keyMap = {
+                'ArrowLeft': 'left',
+                'ArrowRight': 'right',
+                'ArrowDown': 'down',
+                'ArrowUp': 'rotate_cw',
+                'x': 'rotate_cw',
+                'X': 'rotate_cw',
+                'z': 'rotate_ccw',
+                'Z': 'rotate_ccw',
+                'Control': 'rotate_ccw',
+                'c': 'hold',
+                'C': 'hold',
+                'Shift': 'hold',
+                ' ': 'hard_drop',
+            };
+
+            const input = keyMap[e.key];
+            if (!input) return;
+
+            e.preventDefault();
+
+            if (this.isSoloMode) {
+                // 솔로 모드: 로컬 게임 객체 직접 호출
+                switch (input) {
+                    case 'left': window.game.moveLeft(); break;
+                    case 'right': window.game.moveRight(); break;
+                    case 'down': window.game.moveDown(); break;
+                    case 'rotate_cw': window.game.rotate(true); break;
+                    case 'rotate_ccw': window.game.rotate(false); break;
+                    case 'hold': window.game.holdPiece(); break;
+                    case 'hard_drop': window.game.hardDrop(); break;
+                }
+            } else {
+                // 멀티플레이 모드: 서버로 입력 전송
+                this.send({ type: 'game_input', input: input });
+            }
         });
-        
-        // 현재 타겟 표시 업데이트
         this.updateTargetDisplay();
     }
     
@@ -495,19 +609,6 @@ class LobbyManager {
         const currentIndex = this.availableTargets.indexOf(this.currentTarget);
         const nextIndex = (currentIndex + 1) % this.availableTargets.length;
         this.currentTarget = this.availableTargets[nextIndex];
-        
-        this.updateGamePlayersList();
-        console.log(`타겟 전환: ${this.getPlayerName(this.currentTarget)}`);
-    }
-    
-    getPlayerName(playerId) {
-        if (!this.currentRoom) return '알 수 없음';
-        const player = this.currentRoom.players.find(p => p.id === playerId);
-        return player ? player.name : '알 수 없음';
-    }
-    
-    updateTargetDisplay() {
-        const targetNameEl = document.getElementById('current-target-name');
         if (this.currentTarget) {
             targetNameEl.textContent = this.getPlayerName(this.currentTarget);
         } else {
