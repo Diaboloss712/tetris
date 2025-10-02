@@ -508,8 +508,14 @@ class TetrisGame {
         
         for (let y = 0; y < this.currentPiece.shape.length; y++) {
             for (let x = 0; x < this.currentPiece.shape[y].length; x++) {
-                if (this.currentPiece.shape[y][x] && this.currentPiece.y + y >= 0) {
-                    this.grid[this.currentPiece.y + y][this.currentPiece.x + x] = this.currentPiece.color;
+                if (this.currentPiece.shape[y][x]) {
+                    const gridY = this.currentPiece.y + y;
+                    const gridX = this.currentPiece.x + x;
+                    
+                    // 그리드 범위 체크
+                    if (gridY >= 0 && gridY < this.rows && gridX >= 0 && gridX < this.cols) {
+                        this.grid[gridY][gridX] = this.currentPiece.color;
+                    }
                 }
             }
         }

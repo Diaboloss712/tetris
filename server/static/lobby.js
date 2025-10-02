@@ -553,7 +553,16 @@ class LobbyManager {
             switch (e.key) {
                 case 'ArrowLeft': handleMove('left'); break;
                 case 'ArrowRight': handleMove('right'); break;
-                case 'ArrowDown': this.sendGameInput('down'); break;
+                case 'ArrowDown': 
+                    this.sendGameInput('down');
+                    // 연속 입력 처리 (DAS/ARR)
+                    clearTimeout(this.dasTimeout);
+                    this.dasTimeout = setTimeout(() => {
+                        this.arrInterval = setInterval(() => {
+                            this.sendGameInput('down');
+                        }, this.arrRate);
+                    }, this.dasDelay);
+                    break;
                 case 'ArrowUp': case 'x': case 'X': this.sendGameInput('rotate_cw'); break;
                 case 'z': case 'Z': case 'Control': e.preventDefault(); this.sendGameInput('rotate_ccw'); break;
                 case 'c': case 'C': case 'Shift': e.preventDefault(); this.sendGameInput('hold'); break;
@@ -565,7 +574,7 @@ class LobbyManager {
 
         this.keyupHandler = (e) => {
             this.keysDown[e.key] = false;
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                 clearTimeout(this.dasTimeout);
                 clearInterval(this.arrInterval);
             }
@@ -579,10 +588,20 @@ class LobbyManager {
         // 멀티플레이와 싱글플레이 모두 로컬 게임 실행
         if (!window.game) return;
         
+        // 블록이 없으면 조작 불가 (merge 중)
+        if (!window.game.currentPiece) {
+            console.log('⚠️ 블록 고정 중 - 조작 불가');
+            return;
+        }
+        
         switch (input) {
             case 'left': window.game.moveLeft(); break;
             case 'right': window.game.moveRight(); break;
-            case 'down': window.game.moveDown(); break;
+            case 'down': 
+                if (window.game.moveDown()) {
+                    window.game.score += 1; // 소프트 드롭 점수
+                }
+                break;
             case 'rotate_cw': window.game.rotate(true); break;
             case 'rotate_ccw': window.game.rotate(false); break;
             case 'hold': window.game.holdPiece(); break;
@@ -646,9 +665,9 @@ class LobbyManager {
             if (this.deadPlayers.has(player.id)) playerDiv.classList.add('dead');
 
             playerDiv.innerHTML = `
-                <div class="player-name">${player.name}${this.deadPlayers.has(player.id) ? ' 💀' : ''}</div>
+                <div class="player-name">${player.name}</div>
                 <div class="player-score">점수: 0</div>
-                <canvas id="grid-${player.id}" width="150" height="300"></canvas>
+                <canvas id="grid-${player.id}" width="100" height="200"></canvas>
             `;
             list.appendChild(playerDiv);
 

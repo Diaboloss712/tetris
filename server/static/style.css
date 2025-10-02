@@ -382,58 +382,75 @@ body {
 }
 
 .game-players-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     max-height: none;
+    margin-top: 10px;
 }
 
 .game-player {
-    background: #f8f9fa;
+    background: rgba(0, 0, 0, 0.3);
     border-radius: 8px;
-    padding: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
+    padding: 6px;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.game-player:hover {
+    background: rgba(0, 0, 0, 0.4);
+    transform: scale(1.02);
 }
 
 .game-player.me {
     border: 2px solid #667eea;
+    background: rgba(102, 126, 234, 0.2);
 }
 
 .game-player.target {
-    border: 3px solid #ff6b6b;
-    background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
-    animation: target-pulse 1.5s infinite;
+    border: 2px solid #ff6b6b;
+    background: rgba(255, 107, 107, 0.2);
+    box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
 }
 
 .game-player.dead {
-    opacity: 0.4;
+    opacity: 0.3;
     filter: grayscale(100%);
     pointer-events: none;
 }
 
-.game-player.dead .player-name {
-    text-decoration: line-through;
+.game-player.dead .player-name::after {
+    content: ' 💀';
 }
 
 .game-player .player-name {
     font-weight: 600;
-    margin-bottom: 3px;
-    color: #333;
-    font-size: 0.85em;
+    margin-bottom: 2px;
+    color: white;
+    font-size: 0.75em;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .game-player .player-score {
     font-weight: bold;
-    color: #667eea;
-    font-size: 0.75em;
-    margin-bottom: 5px;
+    color: #ffd93d;
+    font-size: 0.7em;
+    margin-bottom: 4px;
+    text-align: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .game-player canvas {
     width: 100%;
     height: auto;
-    border-radius: 5px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes target-pulse {
