@@ -109,6 +109,15 @@
     <div id="game-screen" class="screen">
         <div class="game-container">
             <div class="game-sidebar left-sidebar">
+                <!-- 아이템 박스 (최상단) -->
+                <div class="items-section" id="items-section" style="display: none;">
+                    <h4>🎁 아이템</h4>
+                    <div id="items-container" class="items-container"></div>
+                    <div style="font-size: 0.75em; color: #666; margin-top: 5px; text-align: center;">
+                        <strong>Alt</strong> 키로 사용
+                    </div>
+                </div>
+                
                 <h3>Hold (C키)</h3>
                 <canvas id="hold-piece-canvas" width="120" height="120"></canvas>
                 
@@ -152,27 +161,6 @@
                     </div>
                     <div class="attack-notification" id="attack-notification" style="display: none;">
                         💥 <span id="attack-from"></span>
-                    </div>
-                </div>
-                
-                <div class="stats">
-                    <div class="stat-item attack">
-                        <span class="stat-label">공격</span>
-                        <span class="stat-value" id="attack-sent">0</span>
-                    </div>
-                    <div class="stat-item defense">
-                        <span class="stat-label">받음</span>
-                        <span class="stat-value" id="attack-received">0</span>
-                    </div>
-                </div>
-                
-                <!-- 아이템 박스 -->
-                <div class="items-section" id="items-section" style="display: none;">
-                    <h4>아이템 (1개 보관)</h4>
-                    <div id="items-container" class="items-container"></div>
-                    <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
-                        <strong>Alt 키</strong>로 사용<br>
-                        👻 유령: Alt 2번 (활성화 → 고정)
                     </div>
                 </div>
             </div>

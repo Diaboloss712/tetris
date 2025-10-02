@@ -559,7 +559,7 @@ class LobbyManager {
                 case 'c': case 'C': case 'Shift': e.preventDefault(); this.sendGameInput('hold'); break;
                 case ' ': e.preventDefault(); this.sendGameInput('hard_drop'); break;
                 case 'Tab': if (!this.isSoloMode) { e.preventDefault(); this.switchTarget(); } break;
-                case 'Alt': e.preventDefault(); /* 아이템 로직 */ break;
+                case 'Alt': e.preventDefault(); if (window.game && window.game.itemMode) window.game.useItem(); break;
             }
         };
 
