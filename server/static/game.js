@@ -358,7 +358,19 @@ class TetrisGame {
 
         // T-Spin 확장: 표준 킥 실패 시 미러 킥 시도
         if (shapeIdx === 2) {
-            const mirrorKicks = kicks.slice(1).map(([dx, dy]) => [-dx, dy]);
+            const isCW = (toRot === (fromRot + 1) % 4);
+            let oppositeKicks;
+
+            if (isCW) {
+                // CW 회전 시, CCW의 반대 전이 테이블을 가져옴 (예: 2->3 CW일 때 3->2 CCW 테이블)
+                oppositeKicks = jlstzTable[`${toRot}->${fromRot}`] || [[0,0]];
+            } else {
+                // CCW 회전 시, CW의 반대 전이 테이블을 가져옴 (예: 3->2 CCW일 때 2->3 CW 테이블)
+                oppositeKicks = jlstzTable[`${toRot}->${fromRot}`] || [[0,0]];
+            }
+            
+            // dx, dy 부호를 모두 반전시켜 완벽한 미러 킥 생성
+            const mirrorKicks = oppositeKicks.slice(1).map(([dx, dy]) => [-dx, -dy]);
             kicks = kicks.concat(mirrorKicks);
         }
 
