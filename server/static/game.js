@@ -514,6 +514,10 @@ class TetrisGame {
             }
         }
         
+        // 블록을 그리드에 병합했으므로 currentPiece 제거
+        const mergedPiece = this.currentPiece;
+        this.currentPiece = null;
+        
         let attackLines = this.clearLines(tSpinResult);
         if (attackLines > 0) {
             console.log(`🎯 clearLines 결과: ${attackLines}줄 공격`);
@@ -549,6 +553,9 @@ class TetrisGame {
             this.gameOver = true;
         }
         
+        // UI 업데이트 (한 번만)
+        this.updateUI();
+        
         return attackLines;
     }
     
@@ -556,12 +563,16 @@ class TetrisGame {
         const linesToClear = [];
         
         for (let y = 0; y < this.rows; y++) {
-            if (this.grid[y].every(cell => cell !== 0)) {
+            if (this.grid[y].every(cell => cell !== 0 && cell !== null && cell !== undefined)) {
                 linesToClear.push(y);
             }
         }
         
         const numLines = linesToClear.length;
+        
+        if (numLines > 0) {
+            console.log(`🎯 clearLines: ${numLines}줄 제거 (줄 번호: ${linesToClear})`);
+        }
         
         if (numLines > 0) {
             // 라인 제거: 클리어되지 않은 줄만 유지
@@ -681,7 +692,6 @@ class TetrisGame {
                 this.attackSent += attackLines;
             }
             
-            this.updateUI();
             return attackLines;
         } else {
             // 콤보 끊김
@@ -690,7 +700,6 @@ class TetrisGame {
                 // 큐에 대기 중인 공격을 확정 공격으로 이동
                 this.pendingGarbage += this.incomingGarbage;
                 this.incomingGarbage = 0;
-                this.updateUI();
             }
         }
         
