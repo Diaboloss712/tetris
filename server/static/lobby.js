@@ -393,13 +393,13 @@ class LobbyManager {
                 case 'ArrowUp':
                 case 'x':
                 case 'X':
-                    window.game.rotate(true);
+                    window.game.rotate(true); // CW
                     break;
                 case 'z':
                 case 'Z':
                 case 'Control':
                     e.preventDefault();
-                    window.game.rotate(false);
+                    window.game.rotate(false); // CCW
                     break;
                 case 'c':
                 case 'C':

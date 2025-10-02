@@ -17,9 +17,10 @@ class TetrisGame {
         this.score = 0;
         this.level = 1;
         this.lines = 0;
+        this.currentRotation = 0; // 현재 회전 상태 (0, 1, 2, 3)
         
         // 중력 시스템 (jstris/tetr.io 스타일)
-        this.gravity = 0.02; // G 단위 (1G = 1칸/프레임)
+        this.gravity = 0.05; // G 단위 (1G = 1칸/프레임)
         this.gravityCounter = 0;
         this.lastFallTime = 0;
         this.frameTime = 1000 / 60; // 60fps
@@ -55,7 +56,7 @@ class TetrisGame {
         this.shapes = [
             [[1,1,1,1]], // I
             [[1,1],[1,1]], // O
-            [[1,1,1],[0,1,0]], // T
+            [[0,1,0],[1,1,1]], // T
             [[1,1,1],[1,0,0]], // L
             [[1,1,1],[0,0,1]], // J
             [[0,1,1],[1,1,0]], // S
@@ -119,7 +120,8 @@ class TetrisGame {
             color: this.colors[shapeIndex],
             shapeIndex: shapeIndex,
             x: Math.floor(this.cols / 2) - 1,
-            y: 0
+            y: 0,
+            rotation: 0
         };
     }
     
@@ -134,6 +136,9 @@ class TetrisGame {
                 color: this.currentPiece.color
             };
             this.currentPiece = this.nextPiece;
+            this.currentPiece.x = Math.floor(this.cols / 2) - 1;
+            this.currentPiece.y = 0;
+            this.currentPiece.rotation = 0;
             this.nextPiece = this.createPiece();
         } else {
             // Hold와 교환
@@ -152,6 +157,9 @@ class TetrisGame {
             };
             
             this.currentPiece = temp;
+            this.currentPiece.x = Math.floor(this.cols / 2) - 1;
+            this.currentPiece.y = 0;
+            this.currentPiece.rotation = 0;
         }
         
         this.canHold = false;
@@ -181,48 +189,180 @@ class TetrisGame {
         return true;
     }
     
+    isValidPosition(shape, posX, posY) {
+        // 회전된 shape + 절대 위치로 직접 검사
+        for (let y = 0; y < shape.length; y++) {
+            for (let x = 0; x < shape[y].length; x++) {
+                if (shape[y][x]) {
+                    const newX = posX + x;
+                    const newY = posY + y;
+                    
+                    // 벽과 바닥 체크
+                    if (newX < 0 || newX >= this.cols || newY >= this.rows) {
+                        return false;
+                    }
+                    
+                    // 블록 충돌 체크
+                    if (newY >= 0 && this.grid[newY][newX] !== 0) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+    
     rotate(clockwise = true) {
-        if (this.ghostMode) return; // 유령 모드에서는 회전 불가
+        if (!this.currentPiece || this.gameOver) return;
         
-        const oldShape = this.currentPiece.shape;
+        const oldRotation = this.currentPiece.rotation || 0;
         
-        if (clockwise) {
-            // 시계방향: 전치 후 행 반전
-            this.currentPiece.shape = this.currentPiece.shape[0].map((_, i) =>
-                this.currentPiece.shape.map(row => row[i]).reverse()
-            );
-        } else {
-            // 반시계방향: 전치 후 열 반전
-            this.currentPiece.shape = this.currentPiece.shape[0].map((_, i) =>
-                this.currentPiece.shape.map(row => row[row.length - 1 - i])
-            );
+        // O블록도 rotation 값은 갱신
+        if (this.currentPiece.shapeIndex === 1) {
+            this.currentPiece.rotation = (oldRotation + (clockwise ? 1 : 3)) % 4;
+            return;
         }
         
-        // Wall kick 시도 (SRS - Super Rotation System)
-        const wallKickOffsets = [
-            [0, 0],   // 기본 위치
-            [-1, 0],  // 왼쪽
-            [1, 0],   // 오른쪽
-            [0, -1],  // 위
-            [-1, -1], // 왼쪽 위
-            [1, -1],  // 오른쪽 위
-        ];
+        // 회전된 shape 계산 (원본은 보존, SRS origin 기준)
+        const rotatedShape = this.getRotatedShape(this.currentPiece.shape, clockwise, this.currentPiece.shapeIndex);
+        const newRotation = (oldRotation + (clockwise ? 1 : 3)) % 4;
+        const dir = clockwise ? 'CW' : 'CCW';
+        const tableKey = `${oldRotation}->${newRotation}`;
         
-        let rotated = false;
-        for (const [dx, dy] of wallKickOffsets) {
-            if (this.validMove(this.currentPiece, dx, dy)) {
-                this.currentPiece.x += dx;
-                this.currentPiece.y += dy;
-                rotated = true;
-                this.resetLockDelay(); // Lock Delay 리셋
-                break;
+        // SRS Wall Kick 테이블
+        const wallKickOffsets = this.getWallKickOffsets(oldRotation, newRotation, this.currentPiece.shapeIndex);
+        
+        console.log(`🔄 회전 시도: ${oldRotation}->${newRotation} (${dir}), 블록:${this.currentPiece.shapeIndex}, 위치:(${this.currentPiece.x}, ${this.currentPiece.y})`);
+        console.log(`회전된 shape:`, JSON.stringify(rotatedShape));
+        console.log(`⚙️ 사용 오프셋 키: ${tableKey}, offsets=`, JSON.stringify(wallKickOffsets));
+        
+        // Wall Kick 시도
+        for (let i = 0; i < wallKickOffsets.length; i++) {
+            const [dx, dy] = wallKickOffsets[i];
+            const testX = this.currentPiece.x + dx;
+            const testY = this.currentPiece.y + dy;
+            
+            // 회전된 shape + 새 위치로 직접 검사
+            if (this.isValidPosition(rotatedShape, testX, testY)) {
+                console.log(`  [${i}] offset:[${dx},${dy}] → 위치:(${testX},${testY}) ✅`);
+                
+                // 성공 → 반영
+                this.currentPiece.shape = rotatedShape;
+                this.currentPiece.rotation = newRotation;
+                this.currentPiece.x = testX;
+                this.currentPiece.y = testY;
+                this.resetLockDelay();
+                
+                if (i > 0) console.log(`✅ Wall Kick 성공!`);
+                return;
+            } else {
+                // 실패 원인 로그
+                let reason = '';
+                for (let y = 0; y < rotatedShape.length; y++) {
+                    for (let x = 0; x < rotatedShape[y].length; x++) {
+                        if (rotatedShape[y][x]) {
+                            const newX = testX + x;
+                            const newY = testY + y;
+                            if (newX < 0) reason = '왼쪽 벽';
+                            else if (newX >= this.cols) reason = '오른쪽 벽';
+                            else if (newY >= this.rows) reason = '바닥';
+                            else if (newY >= 0 && this.grid[newY][newX] !== 0) reason = `블록충돌(${newX},${newY})`;
+                        }
+                    }
+                }
+                console.log(`  [${i}] offset:[${dx},${dy}] → 위치:(${testX},${testY}) ❌ (${reason})`);
             }
         }
         
-        if (!rotated) {
-            // 회전 실패 시 원래 모양으로 복구
-            this.currentPiece.shape = oldShape;
+        console.log(`❌ 모든 Wall Kick 실패! key=${tableKey}, dir=${dir}, shape=${this.currentPiece.shapeIndex}`);
+    }
+    
+    getRotatedShape(shape, clockwise, shapeIdx) {
+        // SRS origin 기준 회전
+        const isI = shapeIdx === 0;
+        const isO = shapeIdx === 1;
+        const boxSize = isI || isO ? 4 : 3;
+        
+        let originX, originY;
+        if (isI) { originX = 1.5; originY = 1.5; }
+        else if (isO) { originX = 0.5; originY = 0.5; }
+        else { originX = 1; originY = 1; }
+        
+        // 패딩된 SRS 박스 생성 (왼쪽 위 정렬)
+        const box = Array.from({ length: boxSize }, () => Array(boxSize).fill(0));
+        for (let y = 0; y < shape.length; y++) {
+            for (let x = 0; x < shape[y].length; x++) {
+                if (shape[y][x]) {
+                    if (y < boxSize && x < boxSize) box[y][x] = 1;
+                }
+            }
         }
+        
+        // origin 기준 회전
+        const rotatedBox = Array.from({ length: boxSize }, () => Array(boxSize).fill(0));
+        for (let y = 0; y < boxSize; y++) {
+            for (let x = 0; x < boxSize; x++) {
+                if (!box[y][x]) continue;
+                const relX = x - originX;
+                const relY = y - originY;
+                
+                let rx, ry;
+                if (clockwise) { // CW
+                    rx = originX - relY;
+                    ry = originY + relX;
+                } else { // CCW
+                    rx = originX + relY;
+                    ry = originY - relX;
+                }
+                const nx = Math.round(rx);
+                const ny = Math.round(ry);
+                if (ny >= 0 && ny < boxSize && nx >= 0 && nx < boxSize) {
+                    rotatedBox[ny][nx] = 1;
+                }
+            }
+        }
+        
+        // SRS는 고정 박스 크기 유지 (trim 안 함)
+        return rotatedBox;
+    }
+    
+    getWallKickOffsets(fromRot, toRot, shapeIdx) {
+        // I블록 전용 Wall Kick (표준 SRS: 아래가 +Y)
+        if (shapeIdx === 0) {
+            const iTable = {
+                '0->1': [[0,0], [-2,0], [1,0], [-2,-1], [1,2]],
+                '1->0': [[0,0], [2,0], [-1,0], [2,1], [-1,-2]],
+                '1->2': [[0,0], [-1,0], [2,0], [-1,2], [2,-1]],
+                '2->1': [[0,0], [1,0], [-2,0], [1,-2], [-2,1]],
+                '2->3': [[0,0], [2,0], [-1,0], [2,1], [-1,-2]],
+                '3->2': [[0,0], [-2,0], [1,0], [-2,-1], [1,2]],
+                '3->0': [[0,0], [1,0], [-2,0], [1,-2], [-2,1]],
+                '0->3': [[0,0], [-1,0], [2,0], [-1,2], [2,-1]]
+            };
+            return iTable[`${fromRot}->${toRot}`] || [[0,0]];
+        }
+        
+        // JLSTZ 블록 Wall Kick (표준 SRS: 아래가 +Y)
+        const jlstzTable = {
+            '0->1': [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
+            '1->0': [[0,0], [1,0], [1,-1], [0,2], [1,2]],
+            '1->2': [[0,0], [1,0], [1,-1], [0,2], [1,2]],
+            '2->1': [[0,0], [-1,0], [-1,1], [0,-2], [-1,-2]],
+            '2->3': [[0,0], [1,0], [1,1], [0,-2], [1,-2]],
+            '3->2': [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
+            '3->0': [[0,0], [-1,0], [-1,-1], [0,2], [-1,2]],
+            '0->3': [[0,0], [1,0], [1,1], [0,-2], [1,-2]]
+        };
+
+        let kicks = jlstzTable[`${fromRot}->${toRot}`] || [[0,0]];
+
+        // T-Spin 확장: 표준 킥 실패 시 미러 킥 시도
+        if (shapeIdx === 2) {
+            const mirrorKicks = kicks.slice(1).map(([dx, dy]) => [-dx, dy]);
+            kicks = kicks.concat(mirrorKicks);
+        }
+
+        return kicks;
     }
     
     checkTSpin() {
@@ -266,13 +406,14 @@ class TetrisGame {
     }
     
     getFrontCorners() {
-        // T 블록의 회전 상태에 따라 앞쪽 코너 인덱스 반환
-        const shapeStr = JSON.stringify(this.currentPiece.shape);
-        if (shapeStr === JSON.stringify([[1,1,1],[0,1,0]])) return [0, 1]; // 위
-        if (shapeStr === JSON.stringify([[0,1,0],[1,1,1]])) return [2, 3]; // 아래
-        if (shapeStr === JSON.stringify([[0,1],[1,1],[0,1]])) return [1, 3]; // 오른쪽
-        if (shapeStr === JSON.stringify([[1,0],[1,1],[1,0]])) return [0, 2]; // 왼쪽
-        return [0, 1];
+        // T 블록의 회전 상태(0,1,2,3)에 따라 앞쪽 코너 인덱스 반환
+        switch (this.currentPiece.rotation) {
+            case 0: return [0, 1]; // 기본 (위)
+            case 1: return [1, 3]; // 오른쪽
+            case 2: return [2, 3]; // 아래
+            case 3: return [0, 2]; // 왼쪽
+            default: return [0, 1];
+        }
     }
     
     checkPerfectClear() {
@@ -292,6 +433,15 @@ class TetrisGame {
             this.currentPiece.x++;
             this.resetLockDelay();
         }
+    }
+    
+    getGhostPieceY() {
+        // 고스트 피스: 현재 블록이 떨어질 위치의 Y 좌표 계산
+        let ghostY = this.currentPiece.y;
+        while (this.validMove(this.currentPiece, 0, ghostY - this.currentPiece.y + 1)) {
+            ghostY++;
+        }
+        return ghostY;
     }
     
     moveDown() {
