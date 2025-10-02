@@ -17,13 +17,25 @@ class TetrisGame {
         this.score = 0;
         this.level = 1;
         this.lines = 0;
-        this.fallSpeed = 500;
+        
+        // 중력 시스템 (jstris/tetr.io 스타일)
+        this.gravity = 0.02; // G 단위 (1G = 1칸/프레임)
+        this.gravityCounter = 0;
         this.lastFallTime = 0;
+        this.frameTime = 1000 / 60; // 60fps
+        
+        // Lock Delay (바닥 닿은 후 대기 시간)
+        this.lockDelay = 500; // 0.5초
+        this.lockDelayTimer = 0;
+        this.isOnGround = false;
+        this.lockResetCount = 0;
+        this.maxLockResets = 15; // 최대 15번까지 리셋 가능
         
         // 공격/방어 시스템
         this.combo = 0;
         this.backToBack = 0;
-        this.pendingGarbage = 0;
+        this.pendingGarbage = 0; // 확정된 공격 (다음 블록 고정 시 적용)
+        this.incomingGarbage = 0; // 큐에 대기 중인 공격 (콤보 중)
         this.lastClearWasDifficult = false;
         this.attackSent = 0;
         this.attackReceived = 0;
@@ -31,6 +43,13 @@ class TetrisGame {
         // 7-bag 시스템
         this.bag = [];
         this.nextBag = [];
+        
+        // 아이템 시스템
+        this.itemMode = false; // 아이템 모드 활성화 여부
+        this.currentItem = null; // 현재 보관 중인 아이템 (1개만)
+        this.itemSpawnChance = 0.15; // 블록 고정 시 15% 확률로 아이템 생성
+        this.attackBoost = 0; // 다음 공격 보너스
+        this.ghostMode = false; // 유령 블록 모드
         
         // 테트로미노 정의
         this.shapes = [
@@ -134,11 +153,13 @@ class TetrisGame {
                     const newX = piece.x + x + offsetX;
                     const newY = piece.y + y + offsetY;
                     
+                    // 벽과 바닥 체크
                     if (newX < 0 || newX >= this.cols || newY >= this.rows) {
                         return false;
                     }
                     
-                    if (newY >= 0 && this.grid[newY][newX] !== 0) {
+                    // 유령 모드가 아닐 때만 블록 충돌 체크
+                    if (!this.ghostMode && newY >= 0 && this.grid[newY][newX] !== 0) {
                         return false;
                     }
                 }
@@ -148,6 +169,8 @@ class TetrisGame {
     }
     
     rotate(clockwise = true) {
+        if (this.ghostMode) return; // 유령 모드에서는 회전 불가
+        
         const oldShape = this.currentPiece.shape;
         
         if (clockwise) {
@@ -178,15 +201,15 @@ class TetrisGame {
                 this.currentPiece.x += dx;
                 this.currentPiece.y += dy;
                 rotated = true;
+                this.resetLockDelay(); // Lock Delay 리셋
                 break;
             }
         }
         
         if (!rotated) {
+            // 회전 실패 시 원래 모양으로 복구
             this.currentPiece.shape = oldShape;
         }
-        
-        return rotated;
     }
     
     checkTSpin() {
@@ -247,26 +270,43 @@ class TetrisGame {
     moveLeft() {
         if (this.validMove(this.currentPiece, -1, 0)) {
             this.currentPiece.x--;
+            this.resetLockDelay();
         }
     }
     
     moveRight() {
         if (this.validMove(this.currentPiece, 1, 0)) {
             this.currentPiece.x++;
+            this.resetLockDelay();
         }
     }
     
     moveDown() {
         if (this.validMove(this.currentPiece, 0, 1)) {
             this.currentPiece.y++;
+            this.isOnGround = false;
             return true;
         }
+        this.isOnGround = true;
         return false;
+    }
+    
+    resetLockDelay() {
+        // 이동/회전 시 Lock Delay 리셋 (최대 15번)
+        if (this.isOnGround && this.lockResetCount < this.maxLockResets) {
+            this.lockDelayTimer = 0;
+            this.lockResetCount++;
+        }
     }
     
     hardDrop() {
         while (this.validMove(this.currentPiece, 0, 1)) {
+            this.currentPiece.y++;
         }
+        // 하드드롭은 즉시 고정
+        this.isOnGround = false;
+        this.lockDelayTimer = 0;
+        this.lockResetCount = 0;
         return this.merge();
     }
     
@@ -282,7 +322,17 @@ class TetrisGame {
             }
         }
         
-        const attackLines = this.clearLines(tSpinResult);
+        let attackLines = this.clearLines(tSpinResult);
+        
+        // 공격 보너스 적용 (아이템)
+        if (attackLines > 0 && this.attackBoost > 0) {
+            attackLines += this.attackBoost;
+            console.log(`⚔️ 공격 강화! +${this.attackBoost}줄 (총 ${attackLines}줄)`);
+            this.attackBoost = 0;
+        }
+        
+        // 아이템 생성 (아이템 모드)
+        this.generateItem();
         
         // 쓰레기 라인 추가
         if (this.pendingGarbage > 0) {
@@ -294,6 +344,11 @@ class TetrisGame {
         this.nextPiece = this.createPiece();
         this.drawNextPiece();
         this.canHold = true;  // 새 블록이면 다시 Hold 가능
+        
+        // Lock Delay 초기화
+        this.isOnGround = false;
+        this.lockDelayTimer = 0;
+        this.lockResetCount = 0;
         
         if (!this.validMove(this.currentPiece)) {
             this.gameOver = true;
@@ -413,7 +468,10 @@ class TetrisGame {
             this.score += [100, 300, 500, 800][Math.min(numLines - 1, 3)] * this.level;
             this.score += attackLines * 50;
             this.level = Math.floor(this.lines / 10) + 1;
-            this.fallSpeed = Math.max(50, 500 - (this.level - 1) * 50);
+            
+            // 중력 증가 (jstris 스타일)
+            // 레벨 1: 0.02G, 레벨 10: 0.2G, 레벨 20: 1G
+            this.gravity = Math.min(0.02 * this.level, 20);
             
             if (attackLines > 0) {
                 this.attackSent += attackLines;
@@ -422,7 +480,14 @@ class TetrisGame {
             this.updateUI();
             return attackLines;
         } else {
-            this.combo = 0;
+            // 콤보 끊김
+            if (this.combo > 0) {
+                this.combo = 0;
+                // 큐에 대기 중인 공격을 확정 공격으로 이동
+                this.pendingGarbage += this.incomingGarbage;
+                this.incomingGarbage = 0;
+                this.updateUI();
+            }
         }
         
         return 0;
@@ -451,8 +516,305 @@ class TetrisGame {
     }
     
     receiveAttack(lines) {
-        this.pendingGarbage += lines;
+        // 콤보 중이면 큐에 대기, 아니면 확정 공격
+        if (this.combo > 0) {
+            this.incomingGarbage += lines;
+        } else {
+            this.pendingGarbage += lines;
+        }
         this.updateUI();
+    }
+    
+    // 아이템 생성
+    generateItem() {
+        if (!this.itemMode || this.currentItem !== null) return;
+        
+        if (Math.random() < this.itemSpawnChance) {
+            const itemTypes = [
+                { type: 'swap', name: '🔄 블록 교체', desc: '현재 블록 랜덤 교체', category: 'self' },
+                { type: 'clear', name: '🧹 쓰레기 제거', desc: '공격줄 최대 2줄 제거', category: 'self' },
+                { type: 'boost', name: '⚔️ 공격 강화', desc: '다음 공격 +1줄', category: 'self' },
+                { type: 'ipiece', name: '📏 I블록', desc: '현재 블록을 I로 변경', category: 'self' },
+                { type: 'ghost', name: '👻 유령 블록', desc: '블록이 통과 가능', category: 'self' },
+                { type: 'random', name: '🎲 랜덤 블록', desc: '상대 블록 교체', category: 'attack' },
+                { type: 'destroy', name: '💔 보관 파괴', desc: '상대 Hold 제거', category: 'attack' },
+                { type: 'swap_grid', name: '🔀 맵 교체', desc: '상대와 맵 교체 (상대 2줄 제거)', category: 'attack' },
+                { type: 'item_to_clear', name: '✨ 아이템 정화', desc: '모든 상대 아이템을 라인제거로 변경', category: 'attack' },
+                { type: 'redirect_target', name: '🎯 타겟 변경', desc: '상대의 타겟을 랜덤으로 변경', category: 'attack' }
+            ];
+            
+            const randomItem = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+            this.currentItem = randomItem;
+            console.log(`✨ 아이템 획득: ${randomItem.name}`);
+            this.updateItemsUI();
+        }
+    }
+    
+    // 아이템 사용
+    useItem() {
+        if (!this.itemMode || !this.currentItem) return;
+        
+        const item = this.currentItem;
+        console.log(`🎯 아이템 사용: ${item.name}`);
+        
+        switch(item.type) {
+            case 'swap':
+                // 현재 블록 교체
+                this.currentPiece = this.createPiece();
+                console.log('🔄 블록이 교체되었습니다!');
+                this.currentItem = null;
+                break;
+                
+            case 'clear':
+                // 공격 줄 제거
+                const clearAmount = Math.min(2, this.pendingGarbage + this.incomingGarbage);
+                if (clearAmount > 0) {
+                    if (this.pendingGarbage >= clearAmount) {
+                        this.pendingGarbage -= clearAmount;
+                    } else {
+                        const remaining = clearAmount - this.pendingGarbage;
+                        this.pendingGarbage = 0;
+                        this.incomingGarbage -= remaining;
+                    }
+                    console.log(`🧹 공격 ${clearAmount}줄 제거!`);
+                    this.currentItem = null;
+                } else {
+                    console.log('⚠️ 제거할 공격이 없습니다!');
+                    return; // 아이템 소모 안 함
+                }
+                break;
+                
+            case 'boost':
+                // 다음 공격 강화
+                this.attackBoost += 1;
+                console.log('⚔️ 다음 공격 +1줄!');
+                this.currentItem = null;
+                break;
+                
+            case 'ipiece':
+                // I블록으로 변경
+                this.currentPiece = {
+                    shape: [[1,1,1,1]],
+                    color: this.colors[0],
+                    shapeIndex: 0,
+                    x: Math.floor(this.cols / 2) - 1,
+                    y: this.currentPiece.y
+                };
+                console.log('📏 I블록으로 변경!');
+                this.currentItem = null;
+                break;
+                
+            case 'ghost':
+                // 유령 블록 활성화
+                this.ghostMode = true;
+                console.log('👻 유령 블록 활성화! (Alt 다시 눌러 고정)');
+                // 아이템은 고정 시 제거
+                return;
+                
+            case 'random':
+            case 'destroy':
+                // 공격형 아이템
+                if (window.lobbyManager && window.lobbyManager.isSoloMode) {
+                    // 싱글플레이에서는 공격 아이템 사용 불가
+                    console.log('⚠️ 싱글플레이에서는 공격 아이템을 사용할 수 없습니다!');
+                    return;
+                }
+                
+                // 멀티플레이 - 서버로 전송
+                if (window.lobbyManager && window.lobbyManager.currentTarget) {
+                    window.lobbyManager.sendItemAttack(item.type);
+                    this.currentItem = null;
+                } else {
+                    console.log('⚠️ 타겟을 선택해주세요!');
+                    return;
+                }
+                break;
+                
+            case 'swap_grid':
+                // 그리드 교체 아이템
+                if (window.lobbyManager && window.lobbyManager.isSoloMode) {
+                    console.log('⚠️ 싱글플레이에서는 공격 아이템을 사용할 수 없습니다!');
+                    return;
+                }
+                
+                if (window.lobbyManager && window.lobbyManager.currentTarget) {
+                    // 서버로 그리드 교체 요청 (상대방 그리드에서 2줄 제거됨)
+                    window.lobbyManager.sendGridSwap(this.grid);
+                    this.currentItem = null;
+                    console.log('🔀 맵 교체 요청! (상대 맵 2줄 제거 후 교환)');
+                } else {
+                    console.log('⚠️ 타겟을 선택해주세요!');
+                    return;
+                }
+                break;
+                
+            case 'item_to_clear':
+                // 모든 상대 아이템을 라인 제거로 변경
+                if (window.lobbyManager && window.lobbyManager.isSoloMode) {
+                    console.log('⚠️ 싱글플레이에서는 공격 아이템을 사용할 수 없습니다!');
+                    return;
+                }
+                
+                if (window.lobbyManager) {
+                    window.lobbyManager.sendItemAttack(item.type);
+                    this.currentItem = null;
+                    console.log('✨ 모든 상대의 아이템을 정화했습니다!');
+                } else {
+                    console.log('⚠️ 오류가 발생했습니다!');
+                    return;
+                }
+                break;
+                
+            case 'redirect_target':
+                // 타겟의 공격 대상을 랜덤으로 변경
+                if (window.lobbyManager && window.lobbyManager.isSoloMode) {
+                    console.log('⚠️ 싱글플레이에서는 공격 아이템을 사용할 수 없습니다!');
+                    return;
+                }
+                
+                if (window.lobbyManager && window.lobbyManager.currentTarget) {
+                    window.lobbyManager.sendItemAttack(item.type);
+                    this.currentItem = null;
+                    console.log('🎯 상대의 타겟을 변경했습니다!');
+                } else {
+                    console.log('⚠️ 타겟을 선택해주세요!');
+                    return;
+                }
+                break;
+        }
+        
+        this.updateItemsUI();
+        this.draw();
+    }
+    
+    // 유령 블록 고정
+    fixGhostBlock() {
+        if (this.ghostMode) {
+            this.ghostMode = false;
+            this.currentItem = null;
+            
+            // 현재 위치에 블록 고정
+            for (let y = 0; y < this.currentPiece.shape.length; y++) {
+                for (let x = 0; x < this.currentPiece.shape[y].length; x++) {
+                    if (this.currentPiece.shape[y][x]) {
+                        const gridY = this.currentPiece.y + y;
+                        const gridX = this.currentPiece.x + x;
+                        if (gridY >= 0 && gridY < this.rows && gridX >= 0 && gridX < this.cols) {
+                            // 빈 공간만 채움
+                            if (this.grid[gridY][gridX] === 0) {
+                                this.grid[gridY][gridX] = this.currentPiece.color;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            console.log('👻 유령 블록 고정!');
+            
+            // 다음 블록으로
+            this.currentPiece = this.nextPiece;
+            this.nextPiece = this.createPiece();
+            this.drawNextPiece();
+            this.canHold = true;
+            
+            this.updateItemsUI();
+            this.draw();
+        }
+    }
+    
+    updateItemsUI() {
+        const itemsContainer = document.getElementById('items-container');
+        if (!itemsContainer || !this.itemMode) return;
+        
+        itemsContainer.innerHTML = '';
+        
+        if (this.currentItem) {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'item-box';
+            itemDiv.innerHTML = `
+                <div class="item-icon">${this.currentItem.name}</div>
+                <div class="item-key">Alt</div>
+            `;
+            itemDiv.onclick = () => this.useItem();
+            itemsContainer.appendChild(itemDiv);
+        }
+    }
+    
+    // 공격 아이템 받기
+    receiveItemAttack(itemType) {
+        switch(itemType) {
+            case 'random':
+                // 현재 블록 제거하고 다음 블록을 현재로 (순서 유지)
+                this.currentPiece = this.nextPiece;
+                this.nextPiece = this.createPiece();
+                this.drawNextPiece();
+                console.log('🎲 상대가 블록을 교체했습니다! (현재 블록 사라짐)');
+                break;
+                
+            case 'destroy':
+                // Hold 블록 제거
+                if (this.heldPiece) {
+                    this.heldPiece = null;
+                    this.drawHeldPiece();
+                    console.log('💔 Hold 블록이 파괴되었습니다!');
+                }
+                break;
+        }
+        
+        this.draw();
+    }
+    
+    // 그리드 교체 받기
+    receiveGridSwap(newGrid) {
+        if (newGrid && newGrid.length === this.rows) {
+            // 상대 그리드로 교체 후 하단 2줄 제거 (자동으로 내려감)
+            const cleanedGrid = JSON.parse(JSON.stringify(newGrid));
+            
+            // 하단 2줄 제거 (splice로 제거만 하면 자동으로 위 블록들이 내려옴)
+            cleanedGrid.splice(this.rows - 2, 2);
+            
+            // 상단에 빈 줄 2개 추가 (총 20줄 유지)
+            cleanedGrid.unshift(Array(this.cols).fill(0));
+            cleanedGrid.unshift(Array(this.cols).fill(0));
+            
+            this.grid = cleanedGrid;
+            console.log('🔀 상대와 맵이 교체되었습니다! (하단 2줄 제거 → 자동으로 내려감)');
+            
+            // 현재 블록 위치 유효성 체크
+            if (!this.validMove(this.currentPiece)) {
+                this.gameOver = true;
+            }
+            
+            this.draw();
+        }
+    }
+    
+    // 아이템 변경 받기
+    receiveItemChange(changeType) {
+        if (!this.currentItem) return;
+        
+        switch(changeType) {
+            case 'to_clear':
+                // 현재 아이템을 라인 제거로 변경
+                this.currentItem = {
+                    type: 'clear',
+                    name: '🧹 쓰레기 제거',
+                    desc: '공격줄 최대 2줄 제거',
+                    category: 'self'
+                };
+                console.log('✨ 아이템이 라인 제거로 변경되었습니다!');
+                this.updateItemsUI();
+                break;
+        }
+    }
+    
+    // 타겟 변경 받기
+    receiveTargetRedirect(newTargetId) {
+        if (window.lobbyManager && !window.lobbyManager.isSoloMode) {
+            window.lobbyManager.currentTarget = newTargetId;
+            window.lobbyManager.updateGamePlayersList();
+            console.log('🎯 타겟이 변경되었습니다!');
+        }
     }
     
     updateUI() {
@@ -480,17 +842,29 @@ class TetrisGame {
             b2bDisplay.style.display = 'none';
         }
         
-        // 받을 공격 표시
+        // 쓰레기 표시 (확정 공격 + 큐 대기)
         const garbageDisplay = document.getElementById('garbage-display');
-        if (this.pendingGarbage > 0) {
+        const totalGarbage = this.pendingGarbage + this.incomingGarbage;
+        
+        if (totalGarbage > 0) {
             garbageDisplay.style.display = 'block';
-            document.getElementById('garbage-value').textContent = this.pendingGarbage;
+            let garbageText = '';
+            
+            if (this.pendingGarbage > 0) {
+                garbageText += `🔴 ${this.pendingGarbage} (확정 공격)`;
+            }
+            if (this.incomingGarbage > 0) {
+                if (garbageText) garbageText += ' + ';
+                garbageText += `🟡 ${this.incomingGarbage} (큐 대기)`;
+            }
+            
+            document.getElementById('garbage-value').textContent = garbageText;
         } else {
             garbageDisplay.style.display = 'none';
         }
     }
     
-    getGhostPieceY() {
+    getGhostY() {
         // Ghost Piece 위치 계산
         let ghostY = this.currentPiece.y;
         while (this.validMove(this.currentPiece, 0, ghostY - this.currentPiece.y + 1)) {
@@ -648,13 +1022,40 @@ class TetrisGame {
     update(timestamp) {
         if (this.gameOver) return;
         
-        if (timestamp - this.lastFallTime > this.fallSpeed) {
-            if (!this.moveDown()) {
-                const attackLines = this.merge();
-                if (attackLines > 0 && window.sendAttack) {
-                    window.sendAttack(attackLines, this.combo);
+        const deltaTime = timestamp - this.lastFallTime;
+        
+        // 중력 시스템 (jstris/tetr.io 스타일)
+        if (deltaTime > this.frameTime) {
+            this.gravityCounter += this.gravity;
+            
+            // 1칸 이상 내려가야 할 때
+            while (this.gravityCounter >= 1) {
+                this.gravityCounter -= 1;
+                if (!this.moveDown()) {
+                    // 바닥에 닿음 - Lock Delay 시작
+                    this.gravityCounter = 0;
+                    break;
                 }
             }
+            
+            // Lock Delay 처리
+            if (this.isOnGround) {
+                this.lockDelayTimer += deltaTime;
+                
+                if (this.lockDelayTimer >= this.lockDelay || this.lockResetCount >= this.maxLockResets) {
+                    // 블록 고정
+                    const attackLines = this.merge();
+                    if (attackLines > 0 && window.sendAttack) {
+                        window.sendAttack(attackLines, this.combo);
+                    }
+                    
+                    // Lock Delay 리셋
+                    this.lockDelayTimer = 0;
+                    this.lockResetCount = 0;
+                    this.isOnGround = false;
+                }
+            }
+            
             this.lastFallTime = timestamp;
         }
         

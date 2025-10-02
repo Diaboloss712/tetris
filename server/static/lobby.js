@@ -8,6 +8,14 @@ class LobbyManager {
         this.rooms = [];
         this.connected = false;
         
+        // 타겟팅 시스템
+        this.currentTarget = null;
+        this.availableTargets = [];
+        
+        // 싱글플레이 모드
+        this.isSoloMode = false;
+        this.soloItemMode = false;
+        
         this.initElements();
         this.initEventListeners();
         this.connect();
@@ -23,6 +31,9 @@ class LobbyManager {
     }
     
     initEventListeners() {
+        document.getElementById('solo-play-btn').onclick = () => this.showSoloPlayModal();
+        document.getElementById('confirm-solo-play').onclick = () => this.startSoloPlay();
+        document.getElementById('cancel-solo-play').onclick = () => this.hideSoloPlayModal();
         document.getElementById('create-room-btn').onclick = () => this.showCreateRoomModal();
         document.getElementById('refresh-rooms-btn').onclick = () => this.requestRoomList();
         document.getElementById('confirm-create-room').onclick = () => this.createRoom();
@@ -30,6 +41,7 @@ class LobbyManager {
         document.getElementById('ready-btn').onclick = () => this.toggleReady();
         document.getElementById('leave-room-btn').onclick = () => this.leaveRoom();
         document.getElementById('return-lobby-btn').onclick = () => this.returnToLobby();
+        document.getElementById('restart-game-btn').onclick = () => this.restartGame();
     }
     
     connect() {
@@ -94,16 +106,42 @@ class LobbyManager {
                 this.requestRoomList();
                 break;
             case 'game_start':
-                this.startGame();
+                const itemMode = data.item_mode || false;
+                this.startGame(itemMode);
                 break;
             case 'receive_attack':
                 if (window.game) {
                     window.game.receiveAttack(data.lines);
+                    this.showAttackNotification(data.from_name, data.lines);
                     console.log(`공격 받음: ${data.from_name}에게서 ${data.lines}줄!`);
                 }
                 break;
             case 'player_game_over':
                 this.updateGamePlayersList();
+                break;
+            case 'item_attack':
+                if (window.game) {
+                    window.game.receiveItemAttack(data.item_type);
+                    console.log(`아이템 공격 받음: ${data.from_name} → ${data.item_type}`);
+                }
+                break;
+            case 'grid_swap':
+                if (window.game) {
+                    window.game.receiveGridSwap(data.grid);
+                    console.log(`그리드 교체: ${data.from_name}`);
+                }
+                break;
+            case 'item_change':
+                if (window.game) {
+                    window.game.receiveItemChange(data.change_type);
+                    console.log(`아이템 변경: ${data.from_name} (${data.change_type})`);
+                }
+                break;
+            case 'target_redirect':
+                if (window.game) {
+                    window.game.receiveTargetRedirect(data.new_target);
+                    console.log(`타겟 변경됨: ${data.from_name}`);
+                }
                 break;
         }
     }
@@ -135,6 +173,77 @@ class LobbyManager {
         });
     }
     
+    showSoloPlayModal() {
+        document.getElementById('solo-play-modal').classList.add('active');
+    }
+    
+    hideSoloPlayModal() {
+        document.getElementById('solo-play-modal').classList.remove('active');
+    }
+    
+    startSoloPlay() {
+        const selectedMode = document.querySelector('input[name="solo-mode"]:checked').value;
+        this.soloItemMode = (selectedMode === 'item');
+        this.isSoloMode = true;
+        
+        this.hideSoloPlayModal();
+        this.showGameScreen();
+        
+        // 싱글플레이 게임 시작
+        window.game = new TetrisGame('game-canvas');
+        window.game.itemMode = this.soloItemMode;
+        
+        // 아이템 UI 표시
+        const itemsSection = document.getElementById('items-section');
+        if (this.soloItemMode && itemsSection) {
+            itemsSection.style.display = 'block';
+        }
+        
+        // 타겟 UI 숨기기 (싱글플레이)
+        const targetDisplay = document.getElementById('current-target-display');
+        if (targetDisplay) {
+            targetDisplay.style.display = 'none';
+        }
+        
+        // 플레이어 목록 숨기기
+        const playersList = document.getElementById('game-players-list');
+        if (playersList) {
+            playersList.style.display = 'none';
+        }
+        
+        // 게임 루프
+        const gameLoop = (timestamp) => {
+            if (!window.game.gameOver) {
+                window.game.update(timestamp);
+                requestAnimationFrame(gameLoop);
+            } else {
+                this.handleSoloGameOver();
+            }
+        };
+        
+        requestAnimationFrame(gameLoop);
+        
+        // 키보드 이벤트
+        this.setupKeyboardControls();
+    }
+    
+    handleSoloGameOver() {
+        console.log('게임 오버! (싱글플레이)');
+        document.getElementById('game-over-overlay').style.display = 'block';
+        document.getElementById('final-score').textContent = window.game.score;
+        document.getElementById('final-lines').textContent = window.game.lines;
+        document.getElementById('final-level').textContent = window.game.level;
+        document.getElementById('restart-game-btn').style.display = 'inline-block';
+    }
+    
+    restartGame() {
+        // 게임 오버 오버레이 숨기기
+        document.getElementById('game-over-overlay').style.display = 'none';
+        
+        // 게임 재시작
+        this.startSoloPlay();
+    }
+    
     showCreateRoomModal() {
         this.playerName = document.getElementById('player-name').value || '플레이어';
         document.getElementById('create-room-modal').classList.add('active');
@@ -146,11 +255,13 @@ class LobbyManager {
     
     createRoom() {
         const roomName = document.getElementById('room-name').value || '내 방';
+        const itemMode = document.getElementById('item-mode-checkbox').checked;
         this.send({
             type: 'create_room',
             room_name: roomName,
             player_name: this.playerName,
-            max_players: 4
+            max_players: 8,
+            item_mode: itemMode
         });
         this.hideCreateRoomModal();
     }
@@ -181,12 +292,18 @@ class LobbyManager {
     }
     
     updateRoomUI() {
-        if (!this.currentRoom) return;
         
         document.getElementById('room-title').textContent = this.currentRoom.room_name;
         document.getElementById('room-player-count').textContent = 
             `플레이어: ${this.currentRoom.player_count}/${this.currentRoom.max_players}`;
         
+        // 아이템 모드 표시
+        const itemModeEl = document.getElementById('room-item-mode');
+        if (itemModeEl) {
+            itemModeEl.style.display = this.currentRoom.item_mode ? 'inline' : 'none';
+        }
+        
+        // 플레이어 목록 업데이스트
         const playersList = document.getElementById('players-list');
         playersList.innerHTML = '';
         
@@ -226,12 +343,19 @@ class LobbyManager {
         this.gameScreen.classList.add('active');
     }
     
-    startGame() {
-        console.log('게임 시작!');
+    startGame(itemMode = false) {
+        console.log('게임 시작!' + (itemMode ? ' (아이템 모드)' : ''));
         this.showGameScreen();
         
         // 게임 초기화
         window.game = new TetrisGame('game-canvas');
+        window.game.itemMode = itemMode;
+        
+        // 아이템 UI 표시
+        const itemsSection = document.getElementById('items-section');
+        if (itemMode && itemsSection) {
+            itemsSection.style.display = 'block';
+        }
         
         // 게임 루프
         const gameLoop = (timestamp) => {
@@ -246,6 +370,13 @@ class LobbyManager {
         requestAnimationFrame(gameLoop);
         
         // 키보드 이벤트
+        this.setupKeyboardControls();
+        
+        this.updateGamePlayersList();
+    }
+    
+    setupKeyboardControls() {
+        // 키보드 이벤트 (싱글/멀티 공통)
         document.addEventListener('keydown', (e) => {
             if (!window.game || window.game.gameOver) return;
             
@@ -262,40 +393,52 @@ class LobbyManager {
                 case 'ArrowUp':
                 case 'x':
                 case 'X':
-                    // 시계방향 회전
                     window.game.rotate(true);
                     break;
                 case 'z':
                 case 'Z':
                 case 'Control':
-                    // 반시계방향 회전
                     e.preventDefault();
                     window.game.rotate(false);
                     break;
                 case 'c':
                 case 'C':
                 case 'Shift':
-                    // Hold
                     e.preventDefault();
                     window.game.holdPiece();
                     break;
                 case ' ':
                     e.preventDefault();
                     const attackLines = window.game.hardDrop();
-                    if (attackLines > 0) {
+                    if (!this.isSoloMode && attackLines > 0 && this.currentTarget) {
                         this.send({
                             type: 'attack',
+                            target_id: this.currentTarget,
                             lines: attackLines,
                             combo: window.game.combo
                         });
+                    }
+                    break;
+                case 'Tab':
+                    if (!this.isSoloMode) {
+                        e.preventDefault();
+                        this.switchTarget();
+                    }
+                    break;
+                case 'Alt':
+                    e.preventDefault();
+                    if (window.game.itemMode) {
+                        if (window.game.ghostMode) {
+                            window.game.fixGhostBlock();
+                        } else {
+                            window.game.useItem();
+                        }
                     }
                     break;
             }
             
             window.game.draw();
         });
-        
-        this.updateGamePlayersList();
     }
     
     updateGamePlayersList() {
@@ -305,14 +448,120 @@ class LobbyManager {
         const list = document.getElementById('game-players-list');
         list.innerHTML = '';
         
+        // 사용 가능한 타겟 업데이트 (자신 제외)
+        this.availableTargets = this.currentRoom.players
+            .filter(p => p.id !== this.playerId)
+            .map(p => p.id);
+        
+        // 현재 타겟이 없거나 유효하지 않으면 첫 번째 타겟으로 설정
+        if (!this.currentTarget || !this.availableTargets.includes(this.currentTarget)) {
+            this.currentTarget = this.availableTargets[0] || null;
+        }
+        
         this.currentRoom.players.forEach(player => {
             const item = document.createElement('div');
             item.className = 'game-player-item';
-            if (player.id === this.playerId) item.classList.add('me');
+            if (player.id === this.playerId) {
+                item.classList.add('me');
+            } else {
+                // 타겟 표시
+                if (player.id === this.currentTarget) {
+                    item.classList.add('targeted');
+                }
+                // 클릭으로 타겟 변경
+                item.onclick = () => {
+                    this.setTarget(player.id);
+                };
+            }
             
-            item.textContent = player.name;
+            item.textContent = player.name + (player.id === this.playerId ? ' (나)' : '');
             list.appendChild(item);
         });
+        
+        // 현재 타겟 표시 업데이트
+        this.updateTargetDisplay();
+    }
+    
+    setTarget(targetId) {
+        if (targetId === this.playerId) return;
+        this.currentTarget = targetId;
+        this.updateGamePlayersList();
+        console.log(`타겟 변경: ${this.getPlayerName(targetId)}`);
+    }
+    
+    switchTarget() {
+        if (this.availableTargets.length === 0) return;
+        
+        const currentIndex = this.availableTargets.indexOf(this.currentTarget);
+        const nextIndex = (currentIndex + 1) % this.availableTargets.length;
+        this.currentTarget = this.availableTargets[nextIndex];
+        
+        this.updateGamePlayersList();
+        console.log(`타겟 전환: ${this.getPlayerName(this.currentTarget)}`);
+    }
+    
+    getPlayerName(playerId) {
+        if (!this.currentRoom) return '알 수 없음';
+        const player = this.currentRoom.players.find(p => p.id === playerId);
+        return player ? player.name : '알 수 없음';
+    }
+    
+    updateTargetDisplay() {
+        const targetNameEl = document.getElementById('current-target-name');
+        if (this.currentTarget) {
+            targetNameEl.textContent = this.getPlayerName(this.currentTarget);
+        } else {
+            targetNameEl.textContent = '없음';
+        }
+    }
+    
+    showAttackNotification(fromName, lines) {
+        const notification = document.getElementById('attack-notification');
+        const attackFrom = document.getElementById('attack-from');
+        
+        attackFrom.textContent = `${fromName}에게서 ${lines}줄 공격!`;
+        notification.style.display = 'block';
+        
+        // 3초 후 숨기기
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
+    }
+    
+    // 아이템 공격 전송
+    sendItemAttack(itemType) {
+        if (!this.currentTarget) {
+            console.log('⚠️ 타겟을 선택해주세요!');
+            return;
+        }
+        
+        this.send({
+            type: 'item_attack',
+            target_id: this.currentTarget,
+            item_type: itemType
+        });
+        
+        const itemNames = {
+            'random': '🎲 랜덤 블록',
+            'destroy': '💔 보관 파괴'
+        };
+        console.log(`${itemNames[itemType]} 아이템 사용 → ${this.getPlayerName(this.currentTarget)}`);
+    }
+    
+    // 그리드 교체 전송
+    sendGridSwap(myGrid) {
+        if (!this.currentTarget) {
+            console.log('⚠️ 타겟을 선택해주세요!');
+            return;
+        }
+        
+        this.send({
+            type: 'grid_swap',
+            target_id: this.currentTarget,
+            my_grid: myGrid
+        });
+        
+        console.log(`🔀 맵 교체 요청 → ${this.getPlayerName(this.currentTarget)}`);
     }
     
     handleGameOver() {
@@ -328,7 +577,14 @@ class LobbyManager {
     returnToLobby() {
         window.game = null;
         document.getElementById('game-over-overlay').style.display = 'none';
-        this.leaveRoom();
+        document.getElementById('restart-game-btn').style.display = 'none';
+        
+        if (this.isSoloMode) {
+            this.isSoloMode = false;
+            this.showLobbyScreen();
+        } else {
+            this.leaveRoom();
+        }
     }
 }
 

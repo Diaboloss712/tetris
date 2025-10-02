@@ -21,7 +21,8 @@
             </div>
             
             <div class="button-group">
-                <button id="create-room-btn" class="btn btn-primary">방 만들기</button>
+                <button id="solo-play-btn" class="btn btn-primary">🎮 혼자 하기</button>
+                <button id="create-room-btn" class="btn btn-secondary">방 만들기</button>
                 <button id="refresh-rooms-btn" class="btn btn-secondary">새로고침</button>
             </div>
             
@@ -34,6 +35,30 @@
         </div>
     </div>
     
+    <!-- 싱글플레이 모달 -->
+    <div id="solo-play-modal" class="modal">
+        <div class="modal-content">
+            <h2>🎮 혼자 하기</h2>
+            <div class="form-group">
+                <label>게임 모드</label>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <label style="flex: 1; cursor: pointer; padding: 15px; border: 2px solid #667eea; border-radius: 10px; text-align: center;">
+                        <input type="radio" name="solo-mode" value="normal" checked style="margin-right: 5px;">
+                        일반 모드
+                    </label>
+                    <label style="flex: 1; cursor: pointer; padding: 15px; border: 2px solid #667eea; border-radius: 10px; text-align: center;">
+                        <input type="radio" name="solo-mode" value="item" style="margin-right: 5px;">
+                        🎁 아이템 모드
+                    </label>
+                </div>
+            </div>
+            <div class="button-group">
+                <button id="confirm-solo-play" class="btn btn-primary">시작</button>
+                <button id="cancel-solo-play" class="btn btn-secondary">취소</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- 방 생성 모달 -->
     <div id="create-room-modal" class="modal">
         <div class="modal-content">
@@ -41,6 +66,16 @@
             <div class="form-group">
                 <label for="room-name">방 이름</label>
                 <input type="text" id="room-name" placeholder="방 이름을 입력하세요" maxlength="20" value="내 방">
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="item-mode-checkbox">
+                    아이템 모드 🎁 (랜덤 아이템 생성)
+                </label>
+                <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                    <strong>자가 강화:</strong> 🔄블록교체, 🧹쓰레기제거, ⚔공격강화, 📏I블록, 👻유령<br>
+                    <strong>상대 공격:</strong> 🎲랜덤블록, 💔보관파괴, 🔀맵교체, ✨아이템정화, 🎯타겟변경
+                </div>
             </div>
             <div class="button-group">
                 <button id="confirm-create-room" class="btn btn-primary">생성</button>
@@ -54,7 +89,8 @@
         <div class="container">
             <h2 id="room-title">대기실</h2>
             <div class="room-info">
-                <span id="room-player-count">플레이어: 0/4</span>
+                <span id="room-player-count">플레이어: 0/8</span>
+                <span id="room-item-mode" style="margin-left: 10px; display: none;">🎁 아이템 모드</span>
             </div>
             
             <div class="players-container">
@@ -102,7 +138,13 @@
                         B2B: <span id="b2b-value">0</span>
                     </div>
                     <div class="garbage-warning" id="garbage-display" style="display: none;">
-                        ⚠️ 받을 공격: <span id="garbage-value">0</span>줄
+                        ⚠️ 받을 공격: <span id="garbage-value">0</span>
+                        <div style="font-size: 0.8em; margin-top: 5px;">
+                            🔴 확정 공격 (즉시)  |  🟡 큐 대기 (콤보 끝)
+                        </div>
+                    </div>
+                    <div class="attack-notification" id="attack-notification" style="display: none;">
+                        💥 <span id="attack-from"></span>
                     </div>
                 </div>
                 
@@ -116,6 +158,16 @@
                         <span class="stat-value" id="attack-received">0</span>
                     </div>
                 </div>
+                
+                <!-- 아이템 박스 -->
+                <div class="items-section" id="items-section" style="display: none;">
+                    <h4>아이템 (1개 보관)</h4>
+                    <div id="items-container" class="items-container"></div>
+                    <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                        <strong>Alt 키</strong>로 사용<br>
+                        👻 유령: Alt 2번 (활성화 → 고정)
+                    </div>
+                </div>
             </div>
             
             <div class="game-main">
@@ -123,12 +175,20 @@
                 <div id="game-over-overlay" class="game-over-overlay" style="display: none;">
                     <h2>게임 오버!</h2>
                     <p>점수: <span id="final-score">0</span></p>
-                    <button id="return-lobby-btn" class="btn btn-primary">로비로 돌아가기</button>
+                    <p>라인: <span id="final-lines">0</span></p>
+                    <p>레벨: <span id="final-level">1</span></p>
+                    <div class="button-group" style="margin-top: 20px;">
+                        <button id="restart-game-btn" class="btn btn-primary" style="display: none;">다시 하기</button>
+                        <button id="return-lobby-btn" class="btn btn-secondary">로비로 돌아가기</button>
+                    </div>
                 </div>
             </div>
             
             <div class="game-sidebar right-sidebar">
-                <h3>플레이어</h3>
+                <h3>플레이어 (타겟 선택)</h3>
+                <div id="current-target-display" class="current-target-display">
+                    타겟: <span id="current-target-name">없음</span>
+                </div>
                 <div id="game-players-list" class="game-players-list"></div>
                 
                 <div class="controls-help">
@@ -139,7 +199,9 @@
                     <div class="control-item">Z / Ctrl: 반시계방향</div>
                     <div class="control-item">C / Shift: Hold</div>
                     <div class="control-item">스페이스: 하드 드롭</div>
-                    <div class="control-item" style="margin-top: 10px; color: #ff00ff; font-weight: bold;">✨ 모든 기능 구현!</div>
+                    <div class="control-item" style="margin-top: 10px; color: #ffa500; font-weight: bold;">Tab: 타겟 전환 🎯</div>
+                    <div class="control-item" style="color: #00ff00; font-weight: bold;">Alt: 아이템 사용 🎁</div>
+                    <div class="control-item" style="color: #ff00ff; font-weight: bold;">✨ 모든 기능 구현!</div>
                 </div>
             </div>
         </div>

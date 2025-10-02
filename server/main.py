@@ -23,11 +23,12 @@ app.add_middleware(
 
 # Room/Lobby system
 class Room:
-    def __init__(self, room_id: str, room_name: str, host_id: str, max_players: int = 4):
+    def __init__(self, room_id: str, room_name: str, host_id: str, max_players: int = 8, item_mode: bool = False):
         self.room_id = room_id
         self.room_name = room_name
         self.host_id = host_id
         self.max_players = max_players
+        self.item_mode = item_mode  # 아이템 모드
         self.players: Dict[str, Dict] = {}
         self.grids: Dict[str, List[List[int]]] = {}
         self.scores: Dict[str, int] = {}
@@ -76,6 +77,7 @@ class Room:
             "player_count": len(self.players),
             "max_players": self.max_players,
             "game_active": self.game_active,
+            "item_mode": self.item_mode,
             "players": [{"id": pid, "name": data["name"], "ready": data["ready"]} 
                        for pid, data in self.players.items()]
         }
@@ -93,12 +95,12 @@ class LobbyManager:
         self.rooms: Dict[str, Room] = {}
         self.player_rooms: Dict[str, str] = {}  # player_id -> room_id
 
-    def create_room(self, room_name: str, host_id: str, host_name: str, max_players: int = 4) -> Room:
+    def create_room(self, room_name: str, host_id: str, host_name: str, max_players: int = 8, item_mode: bool = False) -> Room:
         room_id = f"room_{random.randint(1000, 9999)}"
         while room_id in self.rooms:
             room_id = f"room_{random.randint(1000, 9999)}"
         
-        room = Room(room_id, room_name, host_id, max_players)
+        room = Room(room_id, room_name, host_id, max_players, item_mode)
         room.add_player(host_id, host_name)
         self.rooms[room_id] = room
         self.player_rooms[host_id] = room_id
@@ -191,7 +193,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     message["room_name"],
                     client_id,
                     message["player_name"],
-                    message.get("max_players", 4)
+                    message.get("max_players", 4),
+                    message.get("item_mode", False)
                 )
                 await manager.send_to_player(client_id, {
                     "type": "room_joined",
@@ -250,7 +253,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         room.start_game()
                         await manager.broadcast_to_room(room.room_id, {
                             "type": "game_start",
-                            "game_state": room.get_game_state()
+                            "game_state": room.get_game_state(),
+                            "item_mode": room.item_mode
                         })
                     else:
                         await manager.broadcast_to_room(room.room_id, {
@@ -270,23 +274,93 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     })
                     
             elif message["type"] == "attack":
-                # Player sends attack to opponents
+                # Player sends attack to target (타겟팅 시스템)
                 room = lobby_manager.get_room_by_player(client_id)
                 if room:
                     attack_lines = message["lines"]
                     combo = message.get("combo", 0)
+                    target_id = message.get("target_id")
                     
-                    # Send attack to all other players in the room
-                    for player_id in room.players:
-                        if player_id != client_id:
-                            await manager.send_to_player(player_id, {
-                                "type": "receive_attack",
-                                "from_player": client_id,
-                                "from_name": room.players[client_id]["name"],
-                                "lines": attack_lines,
-                                "combo": combo
-                            })
+                    # 타겟이 지정되어 있고 유효한 경우
+                    if target_id and target_id in room.players and target_id != client_id:
+                        await manager.send_to_player(target_id, {
+                            "type": "receive_attack",
+                            "from_player": client_id,
+                            "from_name": room.players[client_id]["name"],
+                            "lines": attack_lines,
+                            "combo": combo
+                        })
+                    # 타겟이 없으면 모든 플레이어에게 (기존 방식)
+                    else:
+                        for player_id in room.players:
+                            if player_id != client_id:
+                                await manager.send_to_player(player_id, {
+                                    "type": "receive_attack",
+                                    "from_player": client_id,
+                                    "from_name": room.players[client_id]["name"],
+                                    "lines": attack_lines,
+                                    "combo": combo
+                                })
                     
+            elif message["type"] == "item_attack":
+                # Player sends item attack to target
+                room = lobby_manager.get_room_by_player(client_id)
+                if room:
+                    target_id = message.get("target_id")
+                    item_type = message.get("item_type")
+                    
+                    # 아이템 정화 - 모든 상대방에게
+                    if item_type == "item_to_clear":
+                        for player_id in room.players:
+                            if player_id != client_id:
+                                await manager.send_to_player(player_id, {
+                                    "type": "item_change",
+                                    "from_player": client_id,
+                                    "from_name": room.players[client_id]["name"],
+                                    "change_type": "to_clear"
+                                })
+                    
+                    # 타겟 변경 - 특정 타겟
+                    elif item_type == "redirect_target":
+                        if target_id and target_id in room.players and target_id != client_id:
+                            # 타겟 리스트에서 랜덤 선택 (자신과 현재 타겟 제외)
+                            available_targets = [pid for pid in room.players.keys() 
+                                               if pid != target_id and pid != client_id]
+                            if available_targets:
+                                new_target = random.choice(available_targets)
+                                await manager.send_to_player(target_id, {
+                                    "type": "target_redirect",
+                                    "from_player": client_id,
+                                    "from_name": room.players[client_id]["name"],
+                                    "new_target": new_target
+                                })
+                    
+                    # 일반 공격 아이템
+                    elif target_id and target_id in room.players and target_id != client_id:
+                        await manager.send_to_player(target_id, {
+                            "type": "item_attack",
+                            "from_player": client_id,
+                            "from_name": room.players[client_id]["name"],
+                            "item_type": item_type
+                        })
+            
+            elif message["type"] == "grid_swap":
+                # Player swaps grid with target
+                room = lobby_manager.get_room_by_player(client_id)
+                if room:
+                    target_id = message.get("target_id")
+                    my_grid = message.get("my_grid")
+                    
+                    if target_id and target_id in room.players and target_id != client_id:
+                        # Get target's current grid (we need to implement grid storage in Room)
+                        # For now, just send the my_grid to target
+                        await manager.send_to_player(target_id, {
+                            "type": "grid_swap",
+                            "from_player": client_id,
+                            "from_name": room.players[client_id]["name"],
+                            "grid": my_grid
+                        })
+                        
             elif message["type"] == "game_over":
                 # Player lost
                 room = lobby_manager.get_room_by_player(client_id)

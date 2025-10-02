@@ -430,6 +430,174 @@ body {
     margin-bottom: 20px;
 }
 
+/* 타겟팅 시스템 */
+.current-target-display {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
+    color: white;
+    padding: 12px;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    animation: pulse-border 2s infinite;
+}
+
+.current-target-display #current-target-name {
+    font-size: 1.1em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes pulse-border {
+    0%, 100% {
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 25px rgba(255, 107, 107, 0.6);
+    }
+}
+
+.game-player-item {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.game-player-item:hover {
+    transform: translateX(5px);
+    background: #f8f9fa;
+}
+
+.game-player-item.targeted {
+    border: 3px solid #ff6b6b;
+    background: linear-gradient(90deg, #fff5f5 0%, #ffe0e0 100%);
+    position: relative;
+    animation: target-glow 1.5s infinite;
+}
+
+.game-player-item.targeted::before {
+    content: '🎯';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.5em;
+    animation: bounce 1s infinite;
+}
+
+@keyframes target-glow {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(255, 107, 107, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 25px rgba(255, 107, 107, 0.7);
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(-50%) scale(1);
+    }
+    50% {
+        transform: translateY(-50%) scale(1.2);
+    }
+}
+
+/* 공격 알림 */
+.attack-notification {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff4757 100%);
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 10px;
+    text-align: center;
+    font-weight: bold;
+    animation: attack-flash 0.5s ease-in-out;
+    box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
+}
+
+@keyframes attack-flash {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.05);
+    }
+}
+
+.attack-notification #attack-from {
+    font-size: 1.1em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 아이템 시스템 */
+.items-section {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.items-section h4 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.items-container {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.item-box {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.item-box:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+}
+
+.item-box:active {
+    transform: translateY(-2px) scale(0.95);
+}
+
+.item-icon {
+    font-size: 1.5em;
+    margin-bottom: 5px;
+    color: white;
+    text-align: center;
+    font-size: 0.85em;
+}
+
+.item-key {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    font-size: 0.8em;
+    font-weight: bold;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* 반응형 */
 @media (max-width: 768px) {
     .game-container {
