@@ -496,7 +496,14 @@ async def read_root():
 async def serve_index():
     index_path = static_dir / "index.html"
     if index_path.exists():
-        return FileResponse(index_path)
+        return FileResponse(
+            index_path,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     return {"message": "Tetris Multiplayer Server - Frontend not found. Access /api for API info."}
 
 if __name__ == "__main__":
