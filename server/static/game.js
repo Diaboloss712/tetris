@@ -701,31 +701,6 @@ class TetrisGame {
         console.log(`💥 쓰레기 라인 추가: ${numLines}줄`);
         this.attackReceived += numLines;
         
-        // 현재 블록 위치를 먼저 위로 올림 (가능한지 체크)
-        if (this.currentPiece) {
-            const newY = this.currentPiece.y - numLines;
-            
-            // 위로 올릴 수 있는지 확인
-            if (newY < 0) {
-                // 올릴 공간이 없으면 게임 오버
-                console.log('💀 쓰레기 라인으로 게임 오버! (공간 부족)');
-                this.gameOver = true;
-                return;
-            }
-            
-            // 임시로 위치를 올려서 체크
-            const originalY = this.currentPiece.y;
-            this.currentPiece.y = newY;
-            
-            // 위로 올린 위치에서 블록이 다른 블록과 겹치는지 확인
-            if (!this.validMove(this.currentPiece)) {
-                console.log('💀 쓰레기 라인으로 게임 오버! (블록 충돌)');
-                this.currentPiece.y = originalY;
-                this.gameOver = true;
-                return;
-            }
-        }
-        
         // 위에서 라인 제거
         for (let i = 0; i < numLines; i++) {
             this.grid.shift();
@@ -737,6 +712,17 @@ class TetrisGame {
             const garbageLine = Array(this.cols).fill(this.garbageColor);
             garbageLine[hole] = 0; // 구멍
             this.grid.push(garbageLine);
+        }
+        
+        // 현재 블록 위치 조정 (위로 올림)
+        if (this.currentPiece) {
+            this.currentPiece.y -= numLines;
+        }
+        
+        // 게임 오버 체크: 맨 위 줄(생명선)에 고정된 블록이 있는지 확인
+        if (this.grid[0].some(cell => cell !== 0)) {
+            console.log('💀 생명선에 블록이 있어 게임 오버!');
+            this.gameOver = true;
         }
         
         this.draw(); // 즉시 화면 업데이트
