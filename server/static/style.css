@@ -364,6 +364,58 @@ body {
 .game-players-list {
     max-height: 300px;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.game-player {
+    background: white;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.game-player.me {
+    border: 2px solid #667eea;
+}
+
+.game-player.target {
+    border: 3px solid #ff6b6b;
+    background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
+    animation: target-pulse 1.5s infinite;
+}
+
+.game-player.dead {
+    opacity: 0.4;
+    filter: grayscale(100%);
+    pointer-events: none;
+}
+
+.game-player.dead .player-name {
+    text-decoration: line-through;
+}
+
+.game-player .player-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.game-player .player-score {
+    font-weight: bold;
+    color: #667eea;
+    font-size: 0.9em;
+}
+
+@keyframes target-pulse {
+    0%, 100% {
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(255, 107, 107, 0.8);
+    }
 }
 
 .game-player-item {

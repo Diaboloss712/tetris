@@ -14,6 +14,7 @@ class TetrisGame {
         this.heldPiece = null;
         this.canHold = true;
         this.gameOver = false;
+        this.gameOverSent = false; // 멀티플레이 게임 오버 메시지 전송 여부
         this.score = 0;
         this.level = 1;
         this.lines = 0;
@@ -1195,7 +1196,14 @@ class TetrisGame {
     }
     
     update(timestamp) {
-        if (this.gameOver) return;
+        if (this.gameOver) {
+            // 멀티플레이에서 게임 오버 시 서버에 알림
+            if (window.lobbyManager && !window.lobbyManager.isSoloMode && !this.gameOverSent) {
+                this.gameOverSent = true;
+                window.lobbyManager.handleGameOver();
+            }
+            return;
+        }
         
         const deltaTime = timestamp - this.lastFallTime;
         

@@ -34,6 +34,11 @@ class Room:
         self.games: Dict[str, TetrisGame] = {}
         self.game_active = False
         self.created_at = datetime.now()
+        # 클라이언트 기반 게임 상태 저장
+        self.grids: Dict[str, list] = {}
+        self.scores: Dict[str, int] = {}
+        self.levels: Dict[str, int] = {}
+        self.lines: Dict[str, int] = {}
 
     def add_player(self, player_id: str, name: str) -> bool:
         if len(self.players) >= self.max_players:
@@ -65,6 +70,7 @@ class Room:
         for player_id in self.players:
             self.games[player_id] = TetrisGame()
             self.players[player_id]["ready"] = False
+            self.players[player_id]["game_over"] = False
 
     def get_room_info(self) -> dict:
         return {
@@ -78,21 +84,37 @@ class Room:
             "players": [{"id": pid, "name": data["name"], "ready": data["ready"]} 
                        for pid, data in self.players.items()]
         }
+    
+    def get_alive_players(self) -> list:
+        """게임 중 살아있는 플레이어 목록 반환"""
+        return [pid for pid, data in self.players.items() if not data.get("game_over", False)]
+    
+    def reset_game(self):
+        """게임 종료 후 방 상태 초기화"""
+        self.game_active = False
+        self.games.clear()
+        self.grids.clear()
+        self.scores.clear()
+        self.levels.clear()
+        self.lines.clear()
+        for player_id in self.players:
+            self.players[player_id]["ready"] = False
+            self.players[player_id]["game_over"] = False
 
     def get_game_state(self) -> dict:
         game_states = {}
-        for player_id, game in self.games.items():
-            game_states[player_id] = {
-                'grid': game.grid,
-                'score': game.score,
-                'level': game.level,
-                'lines_cleared': game.lines_cleared,
-                'game_over': game.game_over,
-                'current_piece': game.current_piece,
-                'next_piece': game.next_piece
-            }
+        # 클라이언트가 보낸 게임 상태 사용
+        for player_id in self.players:
+            if player_id in self.grids:
+                game_states[player_id] = {
+                    'grid': self.grids.get(player_id, []),
+                    'score': self.scores.get(player_id, 0),
+                    'level': self.levels.get(player_id, 1),
+                    'lines_cleared': self.lines.get(player_id, 0),
+                    'game_over': self.players[player_id].get("game_over", False)
+                }
         return {
-            "players": [{"id": pid, "name": data["name"], "score": self.games[pid].score, "ready": data["ready"]} 
+            "players": [{"id": pid, "name": data["name"], "score": self.scores.get(pid, 0), "ready": data["ready"]} 
                        for pid, data in self.players.items()],
             "game_active": self.game_active,
             "game_states": game_states
@@ -271,11 +293,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         })
                 
             elif message["type"] == "update_grid":
-                # Update player's game state
+                # Update player's game state (클라이언트가 보낸 게임 상태 저장)
                 room = lobby_manager.get_room_by_player(client_id)
-                if room and client_id in room.grids:
-                    room.grids[client_id] = message["grid"]
-                    room.scores[client_id] = message["score"]
+                if room and room.game_active:
+                    room.grids[client_id] = message.get("grid", [])
+                    room.scores[client_id] = message.get("score", 0)
+                    room.levels[client_id] = message.get("level", 1)
+                    room.lines[client_id] = message.get("lines", 0)
+                    
+                    # 모든 플레이어에게 게임 상태 브로드캐스트
                     await manager.broadcast_to_room(room.room_id, {
                         "type": "game_state_update",
                         "game_state": room.get_game_state()
@@ -369,41 +395,64 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             "grid": my_grid
                         })
                         
-            elif message["type"] == "game_input":
-                room = lobby_manager.get_room_by_player(client_id)
-                if room and room.game_active and client_id in room.games:
-                    game = room.games[client_id]
-                    input_type = message.get("input")
-
-                    if input_type == 'left':
-                        game.move_left()
-                    elif input_type == 'right':
-                        game.move_right()
-                    elif input_type == 'down':
-                        game.move_down()
-                    elif input_type == 'rotate_cw':
-                        game.rotate(clockwise=True)
-                    elif input_type == 'rotate_ccw':
-                        game.rotate(clockwise=False)
-                    elif input_type == 'hold':
-                        game.hold_piece()
-                    elif input_type == 'hard_drop':
-                        game.hard_drop()
-
-                    await manager.broadcast_to_room(room.room_id, {
-                        "type": "game_state_update",
-                        "game_state": room.get_game_state()
-                    })
-
             elif message["type"] == "game_over":
                 # Player lost
                 room = lobby_manager.get_room_by_player(client_id)
-                if room:
+                if room and room.game_active:
+                    # 플레이어를 게임 오버 상태로 표시
+                    room.players[client_id]["game_over"] = True
+                    
+                    # 모든 플레이어에게 알림
                     await manager.broadcast_to_room(room.room_id, {
                         "type": "player_game_over",
                         "player_id": client_id,
                         "player_name": room.players[client_id]["name"]
                     })
+                    
+                    # 살아있는 플레이어 확인
+                    alive_players = room.get_alive_players()
+                    
+                    if len(alive_players) == 1:
+                        # 1명 남음 - 승리!
+                        winner_id = alive_players[0]
+                        winner_name = room.players[winner_id]["name"]
+                        winner_score = room.games[winner_id].score if winner_id in room.games else 0
+                        
+                        await manager.broadcast_to_room(room.room_id, {
+                            "type": "game_end",
+                            "winner_id": winner_id,
+                            "winner_name": winner_name,
+                            "winner_score": winner_score,
+                            "reason": "last_survivor"
+                        })
+                        
+                        # 게임 종료 및 초기화
+                        room.reset_game()
+                        
+                        # 방 상태 업데이트 전송
+                        await manager.broadcast_to_room(room.room_id, {
+                            "type": "room_update",
+                            "room": room.get_room_info()
+                        })
+                        
+                    elif len(alive_players) == 0:
+                        # 모두 죽음 - 무승부
+                        await manager.broadcast_to_room(room.room_id, {
+                            "type": "game_end",
+                            "winner_id": None,
+                            "winner_name": None,
+                            "winner_score": 0,
+                            "reason": "all_dead"
+                        })
+                        
+                        # 게임 종료 및 초기화
+                        room.reset_game()
+                        
+                        # 방 상태 업데이트 전송
+                        await manager.broadcast_to_room(room.room_id, {
+                            "type": "room_update",
+                            "room": room.get_room_info()
+                        })
                     
     except WebSocketDisconnect:
         manager.disconnect(client_id)
