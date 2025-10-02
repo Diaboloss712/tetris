@@ -83,6 +83,19 @@ class TetrisGame {
         this.nextPiece = this.createPiece();
         this.drawNextPiece();
         this.drawHeldPiece();
+        
+        // 게임 루프 시작
+        this.startGameLoop();
+    }
+    
+    startGameLoop() {
+        const gameLoop = (timestamp) => {
+            if (!this.gameOver) {
+                this.update(timestamp);
+                requestAnimationFrame(gameLoop);
+            }
+        };
+        requestAnimationFrame(gameLoop);
     }
     
     fillBag() {
