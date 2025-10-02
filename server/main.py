@@ -399,14 +399,37 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     my_grid = message.get("my_grid")
                     
                     if target_id and target_id in room.players and target_id != client_id:
-                        # Get target's current grid (we need to implement grid storage in Room)
-                        # For now, just send the my_grid to target
+                        # 타겟에게 내 그리드 전송 (타겟은 이걸 받음)
                         await manager.send_to_player(target_id, {
                             "type": "grid_swap",
                             "from_player": client_id,
                             "from_name": room.players[client_id]["name"],
                             "grid": my_grid
                         })
+                        
+                        # 타겟에게 그리드 요청 메시지 전송
+                        await manager.send_to_player(target_id, {
+                            "type": "request_grid",
+                            "requester_id": client_id
+                        })
+                        
+                        print(f"🔀 그리드 교환: {room.players[client_id]['name']} ↔ {room.players[target_id]['name']}")
+            
+            elif message["type"] == "send_grid":
+                # 그리드 응답 (맵 교환 완료)
+                room = lobby_manager.get_room_by_player(client_id)
+                if room:
+                    target_id = message.get("target_id")
+                    my_grid = message.get("my_grid")
+                    
+                    if target_id and target_id in room.players:
+                        await manager.send_to_player(target_id, {
+                            "type": "grid_swap",
+                            "from_player": client_id,
+                            "from_name": room.players[client_id]["name"],
+                            "grid": my_grid
+                        })
+                        print(f"✅ 그리드 응답: {room.players[client_id]['name']} → {room.players[target_id]['name']}")
                         
             elif message["type"] == "game_over":
                 # Player lost

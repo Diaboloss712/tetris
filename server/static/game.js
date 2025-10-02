@@ -794,11 +794,14 @@ class TetrisGame {
                 this.currentPiece = this.createPiece();
                 console.log('🔄 블록이 교체되었습니다!');
                 this.currentItem = null;
+                this.updateItemsUI();
                 break;
                 
             case 'clear':
                 // 공격 줄 제거
+                console.log(`🧹 쓰레기 제거 시도: pending=${this.pendingGarbage}, incoming=${this.incomingGarbage}`);
                 const clearAmount = Math.min(2, this.pendingGarbage + this.incomingGarbage);
+                
                 if (clearAmount > 0) {
                     if (this.pendingGarbage >= clearAmount) {
                         this.pendingGarbage -= clearAmount;
@@ -807,19 +810,22 @@ class TetrisGame {
                         this.pendingGarbage = 0;
                         this.incomingGarbage -= remaining;
                     }
-                    console.log(`🧹 공격 ${clearAmount}줄 제거!`);
-                    this.currentItem = null;
+                    console.log(`🧹 공격 ${clearAmount}줄 제거 완료! (남은: pending=${this.pendingGarbage}, incoming=${this.incomingGarbage})`);
                 } else {
-                    console.log('⚠️ 제거할 공격이 없습니다!');
-                    return; // 아이템 소모 안 함
+                    console.log('🧹 제거할 공격이 없지만 아이템 소모됨');
                 }
+                
+                this.currentItem = null;
+                this.updateUI();
+                this.updateItemsUI();
                 break;
                 
             case 'boost':
                 // 다음 공격 강화
                 this.attackBoost += 1;
-                console.log('⚔️ 다음 공격 +1줄!');
+                console.log(`⚔️ 다음 공격 +1줄! (현재 attackBoost: ${this.attackBoost})`);
                 this.currentItem = null;
+                this.updateItemsUI();
                 break;
                 
             case 'ipiece':
@@ -833,6 +839,7 @@ class TetrisGame {
                 };
                 console.log('📏 I블록으로 변경!');
                 this.currentItem = null;
+                this.updateItemsUI();
                 break;
                 
             case 'ghost':
@@ -855,6 +862,7 @@ class TetrisGame {
                 if (window.lobbyManager && window.lobbyManager.currentTarget) {
                     window.lobbyManager.sendItemAttack(item.type);
                     this.currentItem = null;
+                    this.updateItemsUI();
                 } else {
                     console.log('⚠️ 타겟을 선택해주세요!');
                     return;
@@ -872,6 +880,7 @@ class TetrisGame {
                     // 서버로 그리드 교체 요청 (상대방 그리드에서 2줄 제거됨)
                     window.lobbyManager.sendGridSwap(this.grid);
                     this.currentItem = null;
+                    this.updateItemsUI();
                     console.log('🔀 맵 교체 요청! (상대 맵 2줄 제거 후 교환)');
                 } else {
                     console.log('⚠️ 타겟을 선택해주세요!');
@@ -889,6 +898,7 @@ class TetrisGame {
                 if (window.lobbyManager) {
                     window.lobbyManager.sendItemAttack(item.type);
                     this.currentItem = null;
+                    this.updateItemsUI();
                     console.log('✨ 모든 상대의 아이템을 정화했습니다!');
                 } else {
                     console.log('⚠️ 오류가 발생했습니다!');
@@ -906,6 +916,7 @@ class TetrisGame {
                 if (window.lobbyManager && window.lobbyManager.currentTarget) {
                     window.lobbyManager.sendItemAttack(item.type);
                     this.currentItem = null;
+                    this.updateItemsUI();
                     console.log('🎯 상대의 타겟을 변경했습니다!');
                 } else {
                     console.log('⚠️ 타겟을 선택해주세요!');
@@ -1009,11 +1020,12 @@ class TetrisGame {
             cleanedGrid.unshift(Array(this.cols).fill(0));
             
             this.grid = cleanedGrid;
-            console.log('🔀 상대와 맵이 교체되었습니다! (하단 2줄 제거 → 자동으로 내려감)');
+            console.log('🔀 상대와 맵이 교체되었습니다! (하단 2줄 제거)');
             
-            // 현재 블록 위치 유효성 체크
-            if (!this.validMove(this.currentPiece)) {
-                this.gameOver = true;
+            // 현재 블록을 새로 생성 (공정한 플레이)
+            if (this.currentPiece) {
+                this.currentPiece = this.createPiece();
+                console.log('🔀 새 블록 생성');
             }
             
             this.draw();

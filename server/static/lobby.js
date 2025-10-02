@@ -174,6 +174,17 @@ class LobbyManager {
                     console.log(`그리드 교체: ${data.from_name}`);
                 }
                 break;
+            case 'request_grid':
+                // 상대방이 내 그리드를 요청함 (맵 교환)
+                if (window.game) {
+                    this.send({
+                        type: 'send_grid',
+                        target_id: data.requester_id,
+                        my_grid: window.game.grid
+                    });
+                    console.log(`그리드 전송: ${data.requester_id}에게`);
+                }
+                break;
             case 'item_change':
                 if (window.game) {
                     window.game.receiveItemChange(data.change_type);
