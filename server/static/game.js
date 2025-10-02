@@ -1043,40 +1043,57 @@ class TetrisGame {
     }
     
     updateUI() {
-        document.getElementById('score').textContent = this.score;
-        document.getElementById('level').textContent = this.level;
-        document.getElementById('lines').textContent = this.lines;
-        document.getElementById('attack-sent').textContent = this.attackSent;
-        document.getElementById('attack-received').textContent = this.attackReceived;
-        
-        // 콤보 표시
-        const comboDisplay = document.getElementById('combo-display');
-        if (this.combo > 1) {
-            comboDisplay.style.display = 'block';
-            document.getElementById('combo-value').textContent = this.combo;
-        } else {
-            comboDisplay.style.display = 'none';
-        }
-        
-        // B2B 표시
-        const b2bDisplay = document.getElementById('b2b-display');
-        if (this.backToBack > 0) {
-            b2bDisplay.style.display = 'block';
-            document.getElementById('b2b-value').textContent = this.backToBack;
-        } else {
-            b2bDisplay.style.display = 'none';
-        }
-        
-        // 쓰레기 표시 (확정 공격 + 큐 대기 분리)
-        const garbageDisplay = document.getElementById('garbage-display');
-        const totalGarbage = this.pendingGarbage + this.incomingGarbage;
-        
-        if (totalGarbage > 0) {
-            garbageDisplay.style.display = 'block';
-            document.getElementById('pending-garbage').textContent = this.pendingGarbage;
-            document.getElementById('incoming-garbage').textContent = this.incomingGarbage;
-        } else {
-            garbageDisplay.style.display = 'none';
+        try {
+            const scoreEl = document.getElementById('score');
+            const levelEl = document.getElementById('level');
+            const linesEl = document.getElementById('lines');
+            
+            if (scoreEl) scoreEl.textContent = this.score;
+            if (levelEl) levelEl.textContent = this.level;
+            if (linesEl) linesEl.textContent = this.lines;
+            
+            // 콤보 표시
+            const comboDisplay = document.getElementById('combo-display');
+            const comboValue = document.getElementById('combo-value');
+            if (comboDisplay && comboValue) {
+                if (this.combo > 1) {
+                    comboDisplay.style.display = 'block';
+                    comboValue.textContent = this.combo;
+                } else {
+                    comboDisplay.style.display = 'none';
+                }
+            }
+            
+            // B2B 표시
+            const b2bDisplay = document.getElementById('b2b-display');
+            const b2bValue = document.getElementById('b2b-value');
+            if (b2bDisplay && b2bValue) {
+                if (this.backToBack > 0) {
+                    b2bDisplay.style.display = 'block';
+                    b2bValue.textContent = this.backToBack;
+                } else {
+                    b2bDisplay.style.display = 'none';
+                }
+            }
+            
+            // 쓰레기 표시 (확정 공격 + 큐 대기 분리)
+            const garbageDisplay = document.getElementById('garbage-display');
+            const pendingGarbage = document.getElementById('pending-garbage');
+            const incomingGarbage = document.getElementById('incoming-garbage');
+            
+            if (garbageDisplay && pendingGarbage && incomingGarbage) {
+                const totalGarbage = this.pendingGarbage + this.incomingGarbage;
+                
+                if (totalGarbage > 0) {
+                    garbageDisplay.style.display = 'block';
+                    pendingGarbage.textContent = this.pendingGarbage;
+                    incomingGarbage.textContent = this.incomingGarbage;
+                } else {
+                    garbageDisplay.style.display = 'none';
+                }
+            }
+        } catch (error) {
+            console.error('updateUI 에러:', error);
         }
     }
     
