@@ -189,8 +189,12 @@ class ConnectionManager:
         if player_id in self.active_connections:
             try:
                 await self.active_connections[player_id].send_json(message)
-            except:
-                pass
+                if message.get("type") == "receive_attack":
+                    print(f"📤 메시지 전송 성공: {player_id} - {message.get('type')} ({message.get('lines')}줄)")
+            except Exception as e:
+                print(f"❌ 메시지 전송 실패: {player_id} - {e}")
+        else:
+            print(f"❌ 연결 없음: {player_id} not in active_connections")
 
     async def broadcast_to_room(self, room_id: str, message: dict):
         if room_id in lobby_manager.rooms:
@@ -315,8 +319,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     combo = message.get("combo", 0)
                     target_id = message.get("target_id")
                     
+                    print(f"⚔️ 공격 메시지 수신: {room.players[client_id]['name']} → {attack_lines}줄, 타겟: {target_id}")
+                    
                     # 타겟이 지정되어 있고 유효한 경우
                     if target_id and target_id in room.players and target_id != client_id:
+                        print(f"🎯 타겟 공격: {target_id} ({room.players[target_id]['name']})")
                         await manager.send_to_player(target_id, {
                             "type": "receive_attack",
                             "from_player": client_id,
@@ -324,10 +331,13 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             "lines": attack_lines,
                             "combo": combo
                         })
+                        print(f"✅ 공격 메시지 전송 완료 → {target_id}")
                     # 타겟이 없으면 모든 플레이어에게 (기존 방식)
                     else:
+                        print(f"📢 전체 공격 (타겟 없음)")
                         for player_id in room.players:
                             if player_id != client_id:
+                                print(f"  → {player_id} ({room.players[player_id]['name']})")
                                 await manager.send_to_player(player_id, {
                                     "type": "receive_attack",
                                     "from_player": client_id,
@@ -335,6 +345,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                                     "lines": attack_lines,
                                     "combo": combo
                                 })
+                        print(f"✅ 전체 공격 메시지 전송 완료")
+                else:
+                    print(f"❌ room not found for player {client_id}")
                     
             elif message["type"] == "item_attack":
                 # Player sends item attack to target

@@ -89,13 +89,30 @@ class LobbyManager {
     }
     
     send(message) {
+        // attack 메시지만 로그
+        if (message.type === 'attack') {
+            console.log('📡 send() 호출:', message.type, 'connected:', this.connected, 'ws:', !!this.ws);
+        }
+        
         if (this.connected && this.ws) {
-            this.ws.send(JSON.stringify(message));
+            try {
+                this.ws.send(JSON.stringify(message));
+                if (message.type === 'attack') {
+                    console.log('✅ WebSocket 전송 성공:', message.type);
+                }
+            } catch (e) {
+                console.error('❌ WebSocket 전송 실패:', e);
+            }
+        } else {
+            console.error('❌ send 실패: connected =', this.connected, ', ws =', !!this.ws);
         }
     }
     
     handleMessage(data) {
-        console.log('Received:', data);
+        // 중요한 메시지만 로그
+        if (['receive_attack', 'player_game_over', 'game_start'].includes(data.type)) {
+            console.log('Received:', data.type);
+        }
         
         switch(data.type) {
             case 'room_list':
@@ -124,10 +141,14 @@ class LobbyManager {
                 }
                 break;
             case 'receive_attack':
+                console.log(`💥 공격 메시지 수신:`, data);
                 if (window.game) {
+                    console.log(`🎯 receiveAttack 호출: ${data.lines}줄`);
                     window.game.receiveAttack(data.lines);
                     this.showAttackNotification(data.from_name, data.lines);
-                    console.log(`공격 받음: ${data.from_name}에게서 ${data.lines}줄!`);
+                    console.log(`✅ 공격 처리 완료: ${data.from_name}에게서 ${data.lines}줄!`);
+                } else {
+                    console.log(`❌ window.game 없음!`);
                 }
                 break;
             case 'player_game_over':
@@ -314,12 +335,7 @@ class LobbyManager {
     }
     
     updateOtherPlayersGrids(gameState) {
-        if (!this.currentRoom || !gameState.game_states) {
-            console.log('❌ updateOtherPlayersGrids: no room or game_states');
-            return;
-        }
-
-        console.log('📡 게임 상태 업데이트:', Object.keys(gameState.game_states).length, '명의 플레이어');
+        if (!this.currentRoom || !gameState.game_states) return;
 
         // 다른 플레이어들의 미니 그리드 및 점수 업데이트 (자신은 제외)
         for (const playerId in gameState.game_states) {
@@ -327,31 +343,18 @@ class LobbyManager {
             const scoreEl = document.querySelector(`#player-${playerId} .player-score`);
             if (scoreEl) scoreEl.textContent = `점수: ${state.score || 0}`;
 
-            if (playerId === this.playerId) {
-                console.log('⏭️ 자신 건너뛰기:', playerId);
-                continue; // 자신은 건너뛰기
-            }
+            if (playerId === this.playerId) continue; // 자신은 건너뛰기
             
             const canvas = document.getElementById(`grid-${playerId}`);
             if (canvas) {
-                console.log('🎨 미니 그리드 그리기:', playerId, 'score:', state.score);
                 const ctx = canvas.getContext('2d');
                 this.drawGame(ctx, state, canvas.width, canvas.height, true);
-            } else {
-                console.log('❌ 캔버스 없음:', `grid-${playerId}`);
             }
         }
     }
 
     drawGame(ctx, state, width, height, isMini = false) {
-        if (!state || !state.grid) {
-            console.log('❌ drawGame: 유효하지 않은 state', state);
-            return;
-        }
-        
-        if (isMini) {
-            console.log('🖼️ 미니 그리드 렌더링, grid 타입:', typeof state.grid, '크기:', state.grid.length);
-        }
+        if (!state || !state.grid) return;
         
         const TILE_SIZE = width / 10;
         ctx.clearRect(0, 0, width, height);
@@ -497,7 +500,6 @@ class LobbyManager {
         this.setupKeyboardControls();
         
         // 주기적으로 게임 상태를 서버로 전송 (다른 플레이어에게 보여주기 위해)
-        let syncCounter = 0;
         this.syncInterval = setInterval(() => {
             if (window.game && !window.game.gameOver) {
                 this.send({
@@ -507,10 +509,6 @@ class LobbyManager {
                     level: window.game.level,
                     lines: window.game.lines
                 });
-                // 10번에 한번만 로그 (1초마다)
-                if (++syncCounter % 10 === 0) {
-                    console.log('📤 게임 상태 전송:', window.game.score, '점');
-                }
             } else if (window.game && window.game.gameOver && !this.myGameOverSent) {
                 this.myGameOverSent = true;
                 clearInterval(this.syncInterval); // 동기화 중지
@@ -519,17 +517,18 @@ class LobbyManager {
             }
         }, 100); // 100ms마다 동기화 및 게임 오버 체크
         
-        // 게임 루프 시작 (멀티플레이 전용)
+        // 게임 루프 시작 (멀티플레이 전용, setInterval로 비활성 탭에서도 동작)
         console.log('🎮 멀티플레이 게임 루프 시작!');
-        const gameLoop = (timestamp) => {
-            if (!window.game.gameOver) {
-                window.game.update(timestamp);
-                requestAnimationFrame(gameLoop);
-            } else {
-                console.log('🛑 게임 루프 종료 (게임 오버)');
+        let lastTime = performance.now();
+        this.gameLoopInterval = setInterval(() => {
+            if (!window.game || window.game.gameOver) {
+                clearInterval(this.gameLoopInterval);
+                return;
             }
-        };
-        requestAnimationFrame(gameLoop);
+            const currentTime = performance.now();
+            window.game.update(currentTime);
+            lastTime = currentTime;
+        }, 16); // ~60 FPS
     }
     
     setupKeyboardControls() {
@@ -803,8 +802,10 @@ class LobbyManager {
     
     handleGameOver() {
         console.log('게임 오버!');
-        document.getElementById('game-over-overlay').style.display = 'block';
+        document.getElementById('game-over-overlay').style.display = 'flex';
         document.getElementById('final-score').textContent = window.game.score;
+        document.getElementById('final-lines').textContent = window.game.lines;
+        document.getElementById('final-level').textContent = window.game.level;
         
         this.send({
             type: 'game_over'
@@ -812,6 +813,16 @@ class LobbyManager {
     }
     
     returnToLobby() {
+        // 게임 루프 정리
+        if (this.gameLoopInterval) {
+            clearInterval(this.gameLoopInterval);
+            this.gameLoopInterval = null;
+        }
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+        
         window.game = null;
         document.getElementById('game-over-overlay').style.display = 'none';
         document.getElementById('restart-game-btn').style.display = 'none';
@@ -827,7 +838,19 @@ class LobbyManager {
 
 // 공격 전송 함수 (전역으로 노출)
 window.sendAttack = function(lines, combo) {
+    console.log('🔥 sendAttack 호출됨:', lines, '줄, 콤보:', combo);
+    console.log('  window.lobbyManager:', !!window.lobbyManager);
+    
     if (window.lobbyManager) {
+        console.log('  isSoloMode:', window.lobbyManager.isSoloMode);
+        console.log('  currentRoom:', !!window.lobbyManager.currentRoom);
+        console.log('  currentTarget:', window.lobbyManager.currentTarget);
+        
+        const targetName = window.lobbyManager.currentTarget ? 
+            window.lobbyManager.getPlayerName(window.lobbyManager.currentTarget) : '모두';
+        
+        console.log(`⚔️ 공격 전송 시도: ${lines}줄 (콤보 ${combo}x) → ${targetName} (ID: ${window.lobbyManager.currentTarget})`);
+        
         window.lobbyManager.send({
             type: 'attack',
             lines: lines,
@@ -835,8 +858,8 @@ window.sendAttack = function(lines, combo) {
             target_id: window.lobbyManager.currentTarget || null
         });
         
-        const targetName = window.lobbyManager.currentTarget ? 
-            window.lobbyManager.getPlayerName(window.lobbyManager.currentTarget) : '모두';
-        console.log(`공격 전송: ${lines}줄 (콤보 ${combo}x) → ${targetName}`);
+        console.log(`✅ send() 호출 완료`);
+    } else {
+        console.log(`❌ window.lobbyManager 없음! 공격 전송 실패`);
     }
 };

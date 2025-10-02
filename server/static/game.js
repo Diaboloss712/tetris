@@ -236,9 +236,9 @@ class TetrisGame {
         // SRS Wall Kick 테이블
         const wallKickOffsets = this.getWallKickOffsets(oldRotation, newRotation, this.currentPiece.shapeIndex);
         
-        console.log(`🔄 회전 시도: ${oldRotation}->${newRotation} (${dir}), 블록:${this.currentPiece.shapeIndex}, 위치:(${this.currentPiece.x}, ${this.currentPiece.y})`);
-        console.log(`회전된 shape:`, JSON.stringify(rotatedShape));
-        console.log(`⚙️ 사용 오프셋 키: ${tableKey}, offsets=`, JSON.stringify(wallKickOffsets));
+        // console.log(`🔄 회전 시도: ${oldRotation}->${newRotation} (${dir}), 블록:${this.currentPiece.shapeIndex}, 위치:(${this.currentPiece.x}, ${this.currentPiece.y})`);
+        // console.log(`회전된 shape:`, JSON.stringify(rotatedShape));
+        // console.log(`⚙️ 사용 오프셋 키: ${tableKey}, offsets=`, JSON.stringify(wallKickOffsets));
         
         // Wall Kick 시도
         for (let i = 0; i < wallKickOffsets.length; i++) {
@@ -248,7 +248,7 @@ class TetrisGame {
             
             // 회전된 shape + 새 위치로 직접 검사
             if (this.isValidPosition(rotatedShape, testX, testY)) {
-                console.log(`  [${i}] offset:[${dx},${dy}] → 위치:(${testX},${testY}) ✅`);
+                // console.log(`  [${i}] offset:[${dx},${dy}] → 위치:(${testX},${testY}) ✅`);
                 
                 // 성공 → 반영
                 this.currentPiece.shape = rotatedShape;
@@ -257,7 +257,7 @@ class TetrisGame {
                 this.currentPiece.y = testY;
                 this.resetLockDelay();
                 
-                if (i > 0) console.log(`✅ Wall Kick 성공!`);
+                // if (i > 0) console.log(`✅ Wall Kick 성공!`);
                 return;
             } else {
                 // 실패 원인 로그
@@ -274,11 +274,11 @@ class TetrisGame {
                         }
                     }
                 }
-                console.log(`  [${i}] offset:[${dx},${dy}] → 위치:(${testX},${testY}) ❌ (${reason})`);
+                // console.log(`  [${i}] offset:[${dx},${dy}] → 위치:(${testX},${testY}) ❌ (${reason})`);
             }
         }
         
-        console.log(`❌ 모든 Wall Kick 실패! key=${tableKey}, dir=${dir}, shape=${this.currentPiece.shapeIndex}`);
+        // console.log(`❌ 모든 Wall Kick 실패! key=${tableKey}, dir=${dir}, shape=${this.currentPiece.shapeIndex}`);
     }
     
     getRotatedShape(shape, clockwise, shapeIdx) {
@@ -486,7 +486,20 @@ class TetrisGame {
         this.isOnGround = false;
         this.lockDelayTimer = 0;
         this.lockResetCount = 0;
-        return this.merge();
+        
+        const attackLines = this.merge();
+        console.log(`🔍 hardDrop merge 완료: attackLines=${attackLines}, sendAttack=${typeof window.sendAttack}`);
+        
+        if (attackLines > 0) {
+            if (window.sendAttack) {
+                console.log(`🚀 공격 전송 (하드드롭): ${attackLines}줄`);
+                window.sendAttack(attackLines, this.combo);
+            } else {
+                console.error('❌ window.sendAttack 정의되지 않음!');
+            }
+        }
+        
+        return attackLines;
     }
     
     merge() {
@@ -502,6 +515,9 @@ class TetrisGame {
         }
         
         let attackLines = this.clearLines(tSpinResult);
+        if (attackLines > 0) {
+            console.log(`🎯 clearLines 결과: ${attackLines}줄 공격`);
+        }
         
         // 공격 보너스 적용 (아이템)
         if (attackLines > 0 && this.attackBoost > 0) {
@@ -631,15 +647,15 @@ class TetrisGame {
                 
                 this.lastClearWasDifficult = isDifficult;
                 
-                // 콤보 보너스
-                if (this.combo > 1) {
-                    const comboBonus = Math.min(this.combo - 1, 10);
+                // 콤보 보너스 (TETR.IO/jstris 기준)
+                if (this.combo > 2) {
+                    let comboBonus = 0;
+                    if (this.combo <= 4) comboBonus = 1;
+                    else if (this.combo <= 7) comboBonus = 2;
+                    else if (this.combo <= 10) comboBonus = 3;
+                    else comboBonus = 4;
+                    
                     attackLines += comboBonus;
-                }
-                
-                // B2B 추가 보너스
-                if (this.backToBack > 1) {
-                    attackLines += Math.min(Math.floor(this.backToBack / 2), 3);
                 }
                 
                 // Perfect Clear 보너스!
@@ -685,6 +701,31 @@ class TetrisGame {
         console.log(`💥 쓰레기 라인 추가: ${numLines}줄`);
         this.attackReceived += numLines;
         
+        // 현재 블록 위치를 먼저 위로 올림 (가능한지 체크)
+        if (this.currentPiece) {
+            const newY = this.currentPiece.y - numLines;
+            
+            // 위로 올릴 수 있는지 확인
+            if (newY < 0) {
+                // 올릴 공간이 없으면 게임 오버
+                console.log('💀 쓰레기 라인으로 게임 오버! (공간 부족)');
+                this.gameOver = true;
+                return;
+            }
+            
+            // 임시로 위치를 올려서 체크
+            const originalY = this.currentPiece.y;
+            this.currentPiece.y = newY;
+            
+            // 위로 올린 위치에서 블록이 다른 블록과 겹치는지 확인
+            if (!this.validMove(this.currentPiece)) {
+                console.log('💀 쓰레기 라인으로 게임 오버! (블록 충돌)');
+                this.currentPiece.y = originalY;
+                this.gameOver = true;
+                return;
+            }
+        }
+        
         // 위에서 라인 제거
         for (let i = 0; i < numLines; i++) {
             this.grid.shift();
@@ -696,29 +737,20 @@ class TetrisGame {
             const garbageLine = Array(this.cols).fill(this.garbageColor);
             garbageLine[hole] = 0; // 구멍
             this.grid.push(garbageLine);
-            console.log(`📦 쓰레기 라인 ${i+1}: 구멍 위치 = ${hole}`);
-        }
-        
-        // 현재 블록 위치 조정 (위로 올림)
-        if (this.currentPiece) {
-            this.currentPiece.y -= numLines;
-            
-            // 게임 오버 체크
-            if (!this.validMove(this.currentPiece)) {
-                console.log('💀 쓰레기 라인으로 게임 오버!');
-                this.gameOver = true;
-            }
         }
         
         this.draw(); // 즉시 화면 업데이트
     }
     
     receiveAttack(lines) {
+        console.log(`🎯 공격 받음: ${lines}줄, 콤보: ${this.combo}`);
         // 콤보 중이면 큐에 대기, 아니면 확정 공격
         if (this.combo > 0) {
             this.incomingGarbage += lines;
+            console.log(`  → 큐에 대기 (쇁쇄 가능)`);
         } else {
             this.pendingGarbage += lines;
+            console.log(`  → 확정 공격 (다음 블록에 추가)`);
         }
         this.updateUI();
     }
@@ -1040,23 +1072,14 @@ class TetrisGame {
             b2bDisplay.style.display = 'none';
         }
         
-        // 쓰레기 표시 (확정 공격 + 큐 대기)
+        // 쓰레기 표시 (확정 공격 + 큐 대기 분리)
         const garbageDisplay = document.getElementById('garbage-display');
         const totalGarbage = this.pendingGarbage + this.incomingGarbage;
         
         if (totalGarbage > 0) {
             garbageDisplay.style.display = 'block';
-            let garbageText = '';
-            
-            if (this.pendingGarbage > 0) {
-                garbageText += `🔴 ${this.pendingGarbage} (확정 공격)`;
-            }
-            if (this.incomingGarbage > 0) {
-                if (garbageText) garbageText += ' + ';
-                garbageText += `🟡 ${this.incomingGarbage} (큐 대기)`;
-            }
-            
-            document.getElementById('garbage-value').textContent = garbageText;
+            document.getElementById('pending-garbage').textContent = this.pendingGarbage;
+            document.getElementById('incoming-garbage').textContent = this.incomingGarbage;
         } else {
             garbageDisplay.style.display = 'none';
         }
@@ -1243,8 +1266,15 @@ class TetrisGame {
                 if (this.lockDelayTimer >= this.lockDelay || this.lockResetCount >= this.maxLockResets) {
                     // 블록 고정
                     const attackLines = this.merge();
-                    if (attackLines > 0 && window.sendAttack) {
-                        window.sendAttack(attackLines, this.combo);
+                    console.log(`🔍 merge 완료: attackLines=${attackLines}, sendAttack=${typeof window.sendAttack}, combo=${this.combo}`);
+                    
+                    if (attackLines > 0) {
+                        if (window.sendAttack) {
+                            console.log(`🚀 공격 전송: ${attackLines}줄`);
+                            window.sendAttack(attackLines, this.combo);
+                        } else {
+                            console.error('❌ window.sendAttack 정의되지 않음!');
+                        }
                     }
                     
                     // Lock Delay 리셋

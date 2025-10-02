@@ -187,31 +187,14 @@ body {
 
 .empty-message {
     text-align: center;
-    color: #999;
-    padding: 40px;
-}
-
-/* 모달 */
-.modal {
-    display: none;
-    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
     align-items: center;
     justify-content: center;
-}
-
-.modal.active {
-    display: flex;
-}
-
-.modal-content {
-    background: white;
-    border-radius: 20px;
     padding: 40px;
     max-width: 500px;
     width: 90%;
@@ -483,22 +466,20 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: white;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     padding: 40px;
     border-radius: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     text-align: center;
     z-index: 100;
+    color: white;
+    min-width: 300px;
 }
 
 .game-over-overlay h2 {
-    color: #dc3545;
-    margin-bottom: 20px;
-}
-
-.game-over-overlay p {
-    font-size: 1.2em;
-    margin-bottom: 20px;
+    color: white;
+    margin: 0;
+    font-size: 2em;
 }
 
 /* 타겟팅 시스템 */

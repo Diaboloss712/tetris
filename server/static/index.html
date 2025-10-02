@@ -138,9 +138,16 @@
                         B2B: <span id="b2b-value">0</span>
                     </div>
                     <div class="garbage-warning" id="garbage-display" style="display: none;">
-                        ⚠️ 받을 공격: <span id="garbage-value">0</span>
-                        <div style="font-size: 0.8em; margin-top: 5px;">
-                            🔴 확정 공격 (즉시)  |  🟡 큐 대기 (콤보 끝)
+                        <div style="font-weight: bold; margin-bottom: 5px;">⚠️ 받을 공격</div>
+                        <div style="display: flex; gap: 10px; font-size: 0.9em;">
+                            <div style="flex: 1; text-align: center;">
+                                <div style="color: #ff6b6b; font-weight: bold;">🔴 확정</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="pending-garbage">0</div>
+                            </div>
+                            <div style="flex: 1; text-align: center;">
+                                <div style="color: #ffd93d; font-weight: bold;">🟡 대기</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="incoming-garbage">0</div>
+                            </div>
                         </div>
                     </div>
                     <div class="attack-notification" id="attack-notification" style="display: none;">
@@ -173,11 +180,25 @@
             <div class="game-main">
                 <canvas id="game-canvas" width="300" height="600"></canvas>
                 <div id="game-over-overlay" class="game-over-overlay" style="display: none;">
-                    <h2>게임 오버!</h2>
-                    <p>점수: <span id="final-score">0</span></p>
-                    <p>라인: <span id="final-lines">0</span></p>
-                    <p>레벨: <span id="final-level">1</span></p>
-                    <div class="button-group" style="margin-top: 20px;">
+                    <div style="font-size: 3em; margin-bottom: 10px;">💀</div>
+                    <h2 style="margin-bottom: 20px;">게임 오버</h2>
+                    <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;">
+                            <div>
+                                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">점수</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="final-score">0</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">라인</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="final-lines">0</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.8em; color: #aaa; margin-bottom: 5px;">레벨</div>
+                                <div style="font-size: 1.5em; font-weight: bold;" id="final-level">1</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="button-group">
                         <button id="restart-game-btn" class="btn btn-primary" style="display: none;">다시 하기</button>
                         <button id="return-lobby-btn" class="btn btn-secondary">로비로 돌아가기</button>
                     </div>
