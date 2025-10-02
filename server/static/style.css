@@ -7,11 +7,14 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #333;
+    overflow: hidden; /* 스크롤 비활성화 */
+    margin: 0;
+    padding: 0;
 }
 
 .screen {
@@ -258,17 +261,26 @@ body {
 /* 게임 화면 */
 .game-container {
     display: flex;
-    gap: 20px;
+    gap: 15px;
     justify-content: center;
     align-items: flex-start;
+    max-height: 95vh;
+    overflow: hidden;
 }
 
 .game-sidebar {
     background: white;
     border-radius: 15px;
-    padding: 20px;
-    width: 200px;
+    padding: 15px;
+    width: 180px;
+    max-height: 95vh;
+    overflow-y: auto;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.game-sidebar h3 {
+    font-size: 1em;
+    margin-bottom: 10px;
 }
 
 .game-sidebar h3 {
@@ -362,18 +374,17 @@ body {
 }
 
 .game-players-list {
-    max-height: 300px;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    max-height: none;
 }
 
 .game-player {
-    background: white;
-    border-radius: 10px;
-    padding: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
 }
 
@@ -399,14 +410,22 @@ body {
 
 .game-player .player-name {
     font-weight: 600;
-    margin-bottom: 5px;
+    margin-bottom: 3px;
     color: #333;
+    font-size: 0.85em;
 }
 
 .game-player .player-score {
     font-weight: bold;
     color: #667eea;
-    font-size: 0.9em;
+    font-size: 0.75em;
+    margin-bottom: 5px;
+}
+
+.game-player canvas {
+    width: 100%;
+    height: auto;
+    border-radius: 5px;
 }
 
 @keyframes target-pulse {
@@ -486,11 +505,11 @@ body {
 .current-target-display {
     background: linear-gradient(135deg, #ff6b6b 0%, #ff8787 100%);
     color: white;
-    padding: 12px;
-    border-radius: 10px;
+    padding: 8px;
+    border-radius: 8px;
     text-align: center;
     font-weight: bold;
-    margin-bottom: 15px;
+    font-size: 0.85em;
     box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
     animation: pulse-border 2s infinite;
 }

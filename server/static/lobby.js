@@ -325,7 +325,7 @@ class LobbyManager {
         for (const playerId in gameState.game_states) {
             const state = gameState.game_states[playerId];
             const scoreEl = document.querySelector(`#player-${playerId} .player-score`);
-            if (scoreEl) scoreEl.textContent = state.score || 0;
+            if (scoreEl) scoreEl.textContent = `점수: ${state.score || 0}`;
 
             if (playerId === this.playerId) {
                 console.log('⏭️ 자신 건너뛰기:', playerId);
@@ -344,6 +344,15 @@ class LobbyManager {
     }
 
     drawGame(ctx, state, width, height, isMini = false) {
+        if (!state || !state.grid) {
+            console.log('❌ drawGame: 유효하지 않은 state', state);
+            return;
+        }
+        
+        if (isMini) {
+            console.log('🖼️ 미니 그리드 렌더링, grid 타입:', typeof state.grid, '크기:', state.grid.length);
+        }
+        
         const TILE_SIZE = width / 10;
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = '#111';
@@ -352,11 +361,25 @@ class LobbyManager {
 
         if (state.grid) {
             for (let r = 0; r < 20; r++) {
+                if (!state.grid[r]) continue; // 행이 없으면 건너뛰기
+                
                 for (let c = 0; c < 10; c++) {
-                    if (state.grid[r][c]) {
-                        ctx.fillStyle = this.colors[state.grid[r][c] - 1];
+                    const cell = state.grid[r][c];
+                    if (cell) {
+                        // 색상 문자열인지 확인
+                        if (typeof cell === 'string' && cell.startsWith('#')) {
+                            ctx.fillStyle = cell; // 이미 색상 문자열
+                        } else if (typeof cell === 'number') {
+                            ctx.fillStyle = this.colors[cell - 1] || '#808080'; // 인덱스
+                        } else {
+                            ctx.fillStyle = '#808080'; // 기본 회색
+                        }
+                        
                         ctx.fillRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                        if (!isMini) ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        if (!isMini) {
+                            ctx.strokeStyle = '#555';
+                            ctx.strokeRect(c * TILE_SIZE, r * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        }
                     }
                 }
             }
@@ -614,24 +637,28 @@ class LobbyManager {
         }
 
         this.currentRoom.players.forEach(player => {
+            // 자신은 미니 그리드 표시 안함
+            if (player.id === this.playerId) return;
+            
             const playerDiv = document.createElement('div');
             playerDiv.id = `player-${player.id}`;
             playerDiv.className = 'game-player';
-            if (player.id === this.playerId) playerDiv.classList.add('me');
             if (player.id === this.currentTarget) playerDiv.classList.add('target');
             if (this.deadPlayers.has(player.id)) playerDiv.classList.add('dead');
 
             playerDiv.innerHTML = `
                 <div class="player-name">${player.name}${this.deadPlayers.has(player.id) ? ' 💀' : ''}</div>
-                <div class="player-score">0</div>
-                <canvas id="grid-${player.id}" width="100" height="200"></canvas>
+                <div class="player-score">점수: 0</div>
+                <canvas id="grid-${player.id}" width="150" height="300"></canvas>
             `;
             list.appendChild(playerDiv);
 
             const canvas = document.getElementById(`grid-${player.id}`);
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#111';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#111';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
         });
         this.updateTargetDisplay();
     }

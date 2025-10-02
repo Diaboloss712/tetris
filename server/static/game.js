@@ -682,6 +682,7 @@ class TetrisGame {
     }
     
     addGarbageLines(numLines) {
+        console.log(`💥 쓰레기 라인 추가: ${numLines}줄`);
         this.attackReceived += numLines;
         
         // 위에서 라인 제거
@@ -689,18 +690,27 @@ class TetrisGame {
             this.grid.shift();
         }
         
-        // 아래에 쓰레기 라인 추가
+        // 아래에 쓰레기 라인 추가 (1칸 구멍)
         for (let i = 0; i < numLines; i++) {
             const hole = Math.floor(Math.random() * this.cols);
             const garbageLine = Array(this.cols).fill(this.garbageColor);
-            garbageLine[hole] = 0;
+            garbageLine[hole] = 0; // 구멍
             this.grid.push(garbageLine);
+            console.log(`📦 쓰레기 라인 ${i+1}: 구멍 위치 = ${hole}`);
         }
         
-        // 게임 오버 체크
-        if (!this.validMove(this.currentPiece)) {
-            this.gameOver = true;
+        // 현재 블록 위치 조정 (위로 올림)
+        if (this.currentPiece) {
+            this.currentPiece.y -= numLines;
+            
+            // 게임 오버 체크
+            if (!this.validMove(this.currentPiece)) {
+                console.log('💀 쓰레기 라인으로 게임 오버!');
+                this.gameOver = true;
+            }
         }
+        
+        this.draw(); // 즉시 화면 업데이트
     }
     
     receiveAttack(lines) {
