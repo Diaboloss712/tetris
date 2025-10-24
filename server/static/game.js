@@ -130,7 +130,11 @@ class TetrisGame {
     }
     
     holdPiece() {
-        if (!this.canHold) return;
+        // Hold 사용 불가 체크
+        if (!this.canHold) {
+            console.log('⚠️ Hold는 블록을 고정한 후 사용 가능합니다!');
+            return;
+        }
         
         if (this.heldPiece === null) {
             // 처음 Hold
@@ -255,7 +259,16 @@ class TetrisGame {
                 this.currentPiece.rotation = newRotation;
                 this.currentPiece.x = testX;
                 this.currentPiece.y = testY;
-                this.resetLockDelay();
+                
+                // 회전 후 바닥 상태 다시 확인
+                const wasOnGround = this.isOnGround;
+                this.isOnGround = !this.validMove(this.currentPiece, 0, 1);
+                if (wasOnGround && this.isOnGround) {
+                    this.resetLockDelay();
+                } else if (!this.isOnGround) {
+                    this.lockDelayTimer = 0;
+                    this.lockResetCount = 0;
+                }
                 
                 // if (i > 0) console.log(`✅ Wall Kick 성공!`);
                 return;
@@ -440,14 +453,24 @@ class TetrisGame {
     moveLeft() {
         if (this.validMove(this.currentPiece, -1, 0)) {
             this.currentPiece.x--;
-            this.resetLockDelay();
+            // 이동 후 바닥 상태 다시 확인
+            const wasOnGround = this.isOnGround;
+            this.isOnGround = !this.validMove(this.currentPiece, 0, 1);
+            if (wasOnGround && this.isOnGround) {
+                this.resetLockDelay();
+            }
         }
     }
     
     moveRight() {
         if (this.validMove(this.currentPiece, 1, 0)) {
             this.currentPiece.x++;
-            this.resetLockDelay();
+            // 이동 후 바닥 상태 다시 확인
+            const wasOnGround = this.isOnGround;
+            this.isOnGround = !this.validMove(this.currentPiece, 0, 1);
+            if (wasOnGround && this.isOnGround) {
+                this.resetLockDelay();
+            }
         }
     }
     
@@ -463,18 +486,25 @@ class TetrisGame {
     moveDown() {
         if (this.validMove(this.currentPiece, 0, 1)) {
             this.currentPiece.y++;
-            this.isOnGround = false;
+            // 한 칸 더 내려갈 수 있는지 확인
+            this.isOnGround = !this.validMove(this.currentPiece, 0, 1);
             return true;
         }
+        // 더 이상 내려갈 수 없음 - 바닥에 닿음
         this.isOnGround = true;
         return false;
     }
     
     resetLockDelay() {
         // 이동/회전 시 Lock Delay 리셋 (최대 15번)
+        // 바닥에 닿아있을 때만 리셋
         if (this.isOnGround && this.lockResetCount < this.maxLockResets) {
             this.lockDelayTimer = 0;
             this.lockResetCount++;
+        } else if (!this.isOnGround) {
+            // 바닥에서 떨어진 경우 Lock Delay 완전 초기화
+            this.lockDelayTimer = 0;
+            this.lockResetCount = 0;
         }
     }
     
@@ -785,14 +815,25 @@ class TetrisGame {
     useItem() {
         if (!this.itemMode || !this.currentItem) return;
         
+        // 블록이 없으면 사용 불가 (merge 중)
+        if (!this.currentPiece) {
+            console.log('⚠️ 블록 고정 중에는 아이템을 사용할 수 없습니다!');
+            return;
+        }
+        
         const item = this.currentItem;
         console.log(`🎯 아이템 사용: ${item.name}`);
         
         switch(item.type) {
             case 'swap':
                 // 현재 블록 교체
-                this.currentPiece = this.createPiece();
-                console.log('🔄 블록이 교체되었습니다!');
+                if (this.currentPiece) {
+                    this.currentPiece = this.createPiece();
+                    this.currentPiece.x = Math.floor(this.cols / 2) - 1;
+                    this.currentPiece.y = 0;
+                    this.currentPiece.rotation = 0;
+                    console.log('🔄 블록이 교체되었습니다!');
+                }
                 this.currentItem = null;
                 this.updateItemsUI();
                 break;
@@ -830,13 +871,17 @@ class TetrisGame {
                 
             case 'ipiece':
                 // I블록으로 변경
-                this.currentPiece = {
-                    shape: [[1,1,1,1]],
-                    color: this.colors[0],
-                    shapeIndex: 0,
-                    x: Math.floor(this.cols / 2) - 1,
-                    y: this.currentPiece.y
-                };
+                if (this.currentPiece) {
+                    const currentY = this.currentPiece.y;
+                    this.currentPiece = {
+                        shape: JSON.parse(JSON.stringify(this.shapes[0])),
+                        color: this.colors[0],
+                        shapeIndex: 0,
+                        x: Math.floor(this.cols / 2) - 1,
+                        y: currentY,
+                        rotation: 0
+                    };
+                }
                 console.log('📏 I블록으로 변경!');
                 this.currentItem = null;
                 this.updateItemsUI();
@@ -845,8 +890,9 @@ class TetrisGame {
             case 'ghost':
                 // 유령 블록 활성화
                 this.ghostMode = true;
+                this.currentItem = null;  // 즉시 아이템 제거
+                this.updateItemsUI();
                 console.log('👻 유령 블록 활성화! (Alt 다시 눌러 고정)');
-                // 아이템은 고정 시 제거
                 return;
                 
             case 'random':
@@ -933,7 +979,6 @@ class TetrisGame {
     fixGhostBlock() {
         if (this.ghostMode) {
             this.ghostMode = false;
-            this.currentItem = null;
             
             // 현재 위치에 블록 고정
             for (let y = 0; y < this.currentPiece.shape.length; y++) {
@@ -987,10 +1032,19 @@ class TetrisGame {
         switch(itemType) {
             case 'random':
                 // 현재 블록 제거하고 다음 블록을 현재로 (순서 유지)
-                this.currentPiece = this.nextPiece;
-                this.nextPiece = this.createPiece();
-                this.drawNextPiece();
-                console.log('🎲 상대가 블록을 교체했습니다! (현재 블록 사라짐)');
+                if (this.currentPiece) {
+                    this.currentPiece = this.nextPiece;
+                    this.currentPiece.x = Math.floor(this.cols / 2) - 1;
+                    this.currentPiece.y = 0;
+                    this.currentPiece.rotation = 0;
+                    this.nextPiece = this.createPiece();
+                    this.drawNextPiece();
+                    // Lock Delay 초기화
+                    this.isOnGround = false;
+                    this.lockDelayTimer = 0;
+                    this.lockResetCount = 0;
+                    console.log('🎲 상대가 블록을 교체했습니다! (현재 블록 사라짐)');
+                }
                 break;
                 
             case 'destroy':
@@ -1008,7 +1062,21 @@ class TetrisGame {
     
     // 그리드 교체 받기
     receiveGridSwap(newGrid) {
-        if (newGrid && newGrid.length === this.rows) {
+        // 그리드 유효성 검증
+        if (!newGrid || !Array.isArray(newGrid) || newGrid.length !== this.rows) {
+            console.error('❌ 잘못된 그리드 데이터:', newGrid);
+            return;
+        }
+        
+        // 각 행의 길이 검증
+        for (let row of newGrid) {
+            if (!Array.isArray(row) || row.length !== this.cols) {
+                console.error('❌ 잘못된 그리드 행 길이:', row);
+                return;
+            }
+        }
+        
+        if (true) {
             // 상대 그리드로 교체 후 하단 2줄 제거 (자동으로 내려감)
             const cleanedGrid = JSON.parse(JSON.stringify(newGrid));
             
