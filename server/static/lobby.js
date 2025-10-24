@@ -749,6 +749,7 @@ class LobbyManager {
         // 죽은 플레이어 추적용 (game_over 상태 저장)
         if (!this.deadPlayers) this.deadPlayers = new Set();
 
+        // TETR.IO 스타일: 가로 한 줄 배치 (flex)
         this.currentRoom.players.forEach(player => {
             // 자신은 미니 그리드 표시 안함
             if (player.id === this.playerId) return;
@@ -761,12 +762,12 @@ class LobbyManager {
 
             playerDiv.innerHTML = `
                 <div class="player-name">${player.name}</div>
-                <div class="player-stats" style="display: flex; justify-content: space-between; font-size: 0.75em; color: #ffd93d; margin-bottom: 5px;">
-                    <span>점수: <span class="stat-score-${player.id}">0</span></span>
-                    <span>라인: <span class="stat-lines-${player.id}">0</span></span>
+                <div class="player-stats" style="display: flex; justify-content: space-between; font-size: 0.6em; color: #aaa; margin-bottom: 4px;">
+                    <span><span class="stat-score-${player.id}">0</span>점</span>
+                    <span><span class="stat-lines-${player.id}">0</span>줄</span>
                 </div>
                 <canvas id="grid-${player.id}" width="100" height="200"></canvas>
-                <div class="player-combo" style="display: none; margin-top: 5px; font-size: 0.75em; color: #ffeb3b; text-align: center; font-weight: bold;" id="combo-${player.id}"></div>
+                <div class="player-combo" style="display: none; margin-top: 3px; font-size: 0.6em; color: #ffeb3b; text-align: center; font-weight: bold;" id="combo-${player.id}"></div>
             `;
             list.appendChild(playerDiv);
 
