@@ -146,6 +146,12 @@ class LobbyManager {
                 this.updateTargetDisplay();
                 console.log(`🎯 타겟 변경됨: ${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
                 break;
+            case 'game_tick':
+                // 서버에서 게임 틱 수신 - 비활성 탭에서도 동작
+                if (window.game && !window.game.gameOver) {
+                    window.game.update(performance.now());
+                }
+                break;
             case 'game_state_update':
                 // 다른 플레이어의 미니 그리드 업데이트
                 if (this.currentRoom && !this.isSoloMode && data.game_state) {
@@ -576,7 +582,7 @@ class LobbyManager {
         
         // 서버에서 받은 초기 타겟 설정
         this.currentTarget = initialTarget;
-        console.log(`🎯 초기 타겟 설정: ${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
+        console.log(`🎯 초기 타겟 설정: ID=${this.currentTarget}, 이름=${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
 
         // 멀티플레이에서는 autoStart=false로 생성 (수동으로 게임 루프 시작)
         window.game = new TetrisGame('game-canvas', false);
@@ -587,6 +593,7 @@ class LobbyManager {
         document.getElementById('game-players-list').style.display = 'flex';
 
         this.updateGamePlayersList();
+        this.updateTargetDisplay(); // 타겟 표시 명시적 업데이트
         this.setupKeyboardControls();
         
         // 주기적으로 게임 상태를 서버로 전송 (다른 플레이어에게 보여주기 위해)
@@ -609,18 +616,8 @@ class LobbyManager {
             }
         }, 100); // 100ms마다 동기화 및 게임 오버 체크
         
-        // 게임 루프 시작 (멀티플레이 전용, setInterval로 비활성 탭에서도 동작)
-        console.log('🎮 멀티플레이 게임 루프 시작!');
-        let lastTime = performance.now();
-        this.gameLoopInterval = setInterval(() => {
-            if (!window.game || window.game.gameOver) {
-                clearInterval(this.gameLoopInterval);
-                return;
-            }
-            const currentTime = performance.now();
-            window.game.update(currentTime);
-            lastTime = currentTime;
-        }, 16); // ~60 FPS
+        // 서버 틱 기반 게임 루프 (클라이언트 루프 제거)
+        console.log('🎮 서버 틱 기반 게임 시작! 비활성 탭에서도 정상 동작합니다.');
     }
     
     setupKeyboardControls() {
@@ -786,12 +783,14 @@ class LobbyManager {
         if (!targetDisplay) return;
         
         if (!this.currentTarget) {
-            targetDisplay.textContent = '타겟: 없음';
+            targetDisplay.innerHTML = '<span style="color: #999;">타겟: 없음</span>';
+            console.log('⚠️ 타겟 없음 - 1:1인 경우 서버에서 타겟이 할당되어야 합니다.');
             return;
         }
         
         const targetName = this.getPlayerName(this.currentTarget);
-        targetDisplay.textContent = `🎯 타겟: ${targetName}`;
+        targetDisplay.innerHTML = `🎯 타겟: <strong>${targetName}</strong>`;
+        console.log(`✅ 타겟 표시 업데이트: ${targetName} (ID: ${this.currentTarget})`);
     }
     
     showAttackNotification(fromName, lines) {
@@ -1019,11 +1018,7 @@ class LobbyManager {
     }
     
     returnToLobby() {
-        // 게임 루프 정리
-        if (this.gameLoopInterval) {
-            clearInterval(this.gameLoopInterval);
-            this.gameLoopInterval = null;
-        }
+        // 동기화 인터벌 정리
         if (this.syncInterval) {
             clearInterval(this.syncInterval);
             this.syncInterval = null;

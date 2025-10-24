@@ -39,6 +39,10 @@ class Room:
         self.scores: Dict[str, int] = {}
         self.levels: Dict[str, int] = {}
         self.lines: Dict[str, int] = {}
+        self.combos: Dict[str, int] = {}
+        self.current_targets: Dict[str, Optional[str]] = {}  # player_id -> target_id
+        self.game_tick_task = None  # 서버 게임 틱 태스크
+        self.tick_count = 0
 
     def add_player(self, player_id: str, name: str) -> bool:
         if len(self.players) >= self.max_players:
@@ -67,10 +71,18 @@ class Room:
 
     def start_game(self):
         self.game_active = True
+        self.tick_count = 0
         for player_id in self.players:
             self.games[player_id] = TetrisGame()
             self.players[player_id]["ready"] = False
             self.players[player_id]["game_over"] = False
+        
+        # 각 플레이어에게 최적의 타겟 할당 (중복 없이)
+        self.current_targets.clear()
+        for player_id in self.players:
+            best_target = self.get_best_target_for_player(player_id)
+            self.current_targets[player_id] = best_target
+            print(f"🎯 타겟 할당: {self.players[player_id]['name']} -> {self.players.get(best_target, {}).get('name', 'None') if best_target else 'None'}")
 
     def get_room_info(self) -> dict:
         return {
@@ -89,14 +101,55 @@ class Room:
         """게임 중 살아있는 플레이어 목록 반환"""
         return [pid for pid, data in self.players.items() if not data.get("game_over", False)]
     
+    def get_target_count(self, target_id: str) -> int:
+        """특정 플레이어를 타겟으로 하는 플레이어 수 반환"""
+        return sum(1 for tid in self.current_targets.values() if tid == target_id)
+    
+    def get_best_target_for_player(self, player_id: str) -> Optional[str]:
+        """플레이어에게 최적의 타겟 반환 (타겟팅 제한 고려)"""
+        alive_players = self.get_alive_players()
+        # 자신 제외
+        possible_targets = [pid for pid in alive_players if pid != player_id]
+        
+        print(f"🔍 타겟 선택: {self.players[player_id]['name']} - 가능한 대상: {len(possible_targets)}명")
+        
+        if not possible_targets:
+            print(f"  ❌ 타겟 없음")
+            return None
+        
+        # 각 타겟이 받고 있는 타겟팅 수 계산
+        target_counts = {pid: self.get_target_count(pid) for pid in possible_targets}
+        print(f"  📊 타겟팅 수: {[(self.players[pid]['name'], target_counts[pid]) for pid in possible_targets]}")
+        
+        # 타겟팅을 2명 미만으로 받고 있는 플레이어만 필터링
+        available_targets = [pid for pid in possible_targets if target_counts[pid] < 2]
+        
+        if not available_targets:
+            # 모든 플레이어가 2명 이상에게 타겟팅 받고 있다면, 가장 적게 받는 사람 선택
+            min_count = min(target_counts.values())
+            available_targets = [pid for pid in possible_targets if target_counts[pid] == min_count]
+        
+        # 랜덤하게 선택
+        import random
+        selected = random.choice(available_targets) if available_targets else None
+        if selected:
+            print(f"  ✅ 선택됨: {self.players[selected]['name']}")
+        return selected
+    
     def reset_game(self):
         """게임 종료 후 방 상태 초기화"""
         self.game_active = False
+        self.tick_count = 0
+        if self.game_tick_task:
+            self.game_tick_task.cancel()
+            self.game_tick_task = None
         self.games.clear()
         self.grids.clear()
         self.scores.clear()
         self.levels.clear()
         self.lines.clear()
+        self.combos.clear()
+        self.current_targets.clear()
         for player_id in self.players:
             self.players[player_id]["ready"] = False
             self.players[player_id]["game_over"] = False
@@ -110,14 +163,16 @@ class Room:
                     'grid': self.grids.get(player_id, []),
                     'score': self.scores.get(player_id, 0),
                     'level': self.levels.get(player_id, 1),
-                    'lines_cleared': self.lines.get(player_id, 0),
+                    'lines': self.lines.get(player_id, 0),
+                    'combo': self.combos.get(player_id, 0),
                     'game_over': self.players[player_id].get("game_over", False)
                 }
         return {
             "players": [{"id": pid, "name": data["name"], "score": self.scores.get(pid, 0), "ready": data["ready"]} 
                        for pid, data in self.players.items()],
             "game_active": self.game_active,
-            "game_states": game_states
+            "game_states": game_states,
+            "targeting_info": self.current_targets  # 타겟팅 정보 추가
         }
 
 class LobbyManager:
@@ -204,6 +259,27 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# 게임 틱 루프 함수
+async def game_tick_loop(room: Room, connection_manager: ConnectionManager):
+    """서버에서 60 FPS로 게임 틱을 전송"""
+    try:
+        while room.game_active:
+            room.tick_count += 1
+            
+            # 모든 플레이어에게 틱 신호 전송
+            await connection_manager.broadcast_to_room(room.room_id, {
+                "type": "game_tick",
+                "tick": room.tick_count,
+                "timestamp": datetime.now().timestamp()
+            })
+            
+            # 60 FPS = 16.67ms per frame
+            await asyncio.sleep(0.0167)
+    except asyncio.CancelledError:
+        print(f"🛑 게임 틱 루프 종료: {room.room_id}")
+    except Exception as e:
+        print(f"❌ 게임 틱 루프 에러: {e}")
+
 # WebSocket endpoint
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -285,11 +361,17 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     # Start game if all ready
                     if room.all_players_ready() and len(room.players) > 0:
                         room.start_game()
-                        await manager.broadcast_to_room(room.room_id, {
-                            "type": "game_start",
-                            "game_state": room.get_game_state(),
-                            "item_mode": room.item_mode
-                        })
+                        # 각 플레이어에게 개별적으로 타겟 정보 전송
+                        for player_id in room.players:
+                            await manager.send_to_player(player_id, {
+                                "type": "game_start",
+                                "game_state": room.get_game_state(),
+                                "item_mode": room.item_mode,
+                                "initial_target": room.current_targets.get(player_id)
+                            })
+                        
+                        # 서버 게임 틱 시작
+                        room.game_tick_task = asyncio.create_task(game_tick_loop(room, manager))
                     else:
                         await manager.broadcast_to_room(room.room_id, {
                             "type": "room_update",
@@ -304,6 +386,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     room.scores[client_id] = message.get("score", 0)
                     room.levels[client_id] = message.get("level", 1)
                     room.lines[client_id] = message.get("lines", 0)
+                    room.combos[client_id] = message.get("combo", 0)
                     
                     # 모든 플레이어에게 게임 상태 브로드캐스트
                     await manager.broadcast_to_room(room.room_id, {
@@ -319,7 +402,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     combo = message.get("combo", 0)
                     target_id = message.get("target_id")
                     
-                    print(f"⚔️ 공격 메시지 수신: {room.players[client_id]['name']} → {attack_lines}줄, 타겟: {target_id}")
+                    attacker_name = room.players[client_id]['name']
+                    target_name = room.players.get(target_id, {}).get('name', 'Unknown') if target_id else 'All'
+                    print(f"⚔️ 공격 메시지 수신: {attacker_name} → {attack_lines}줄 (콤보 {combo}x) → 타겟: {target_name} (ID: {target_id})")
                     
                     # 타겟이 지정되어 있고 유효한 경우
                     if target_id and target_id in room.players and target_id != client_id:
@@ -348,6 +433,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         print(f"✅ 전체 공격 메시지 전송 완료")
                 else:
                     print(f"❌ room not found for player {client_id}")
+            
+            elif message["type"] == "switch_target":
+                # Player wants to switch target (Tab key)
+                room = lobby_manager.get_room_by_player(client_id)
+                if room and room.game_active:
+                    new_target = room.get_best_target_for_player(client_id)
+                    room.current_targets[client_id] = new_target
+                    print(f"🔄 타겟 전환: {room.players[client_id]['name']} -> {room.players.get(new_target, {}).get('name', 'None') if new_target else 'None'}")
+                    await manager.send_to_player(client_id, {
+                        "type": "target_changed",
+                        "new_target": new_target
+                    })
                     
             elif message["type"] == "item_attack":
                 # Player sends item attack to target
@@ -437,6 +534,22 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 if room and room.game_active:
                     # 플레이어를 게임 오버 상태로 표시
                     room.players[client_id]["game_over"] = True
+                    
+                    # 죽은 플레이어의 타겟 제거
+                    if client_id in room.current_targets:
+                        del room.current_targets[client_id]
+                    
+                    # 죽은 플레이어를 타겟으로 하고 있던 사람들에게 새 타겟 재할당
+                    for player_id, target_id in list(room.current_targets.items()):
+                        if target_id == client_id:
+                            new_target = room.get_best_target_for_player(player_id)
+                            room.current_targets[player_id] = new_target
+                            print(f"🔄 타겟 재할당: {room.players[player_id]['name']} -> {room.players.get(new_target, {}).get('name', 'None') if new_target else 'None'}")
+                            # 타겟 변경 알림
+                            await manager.send_to_player(player_id, {
+                                "type": "target_changed",
+                                "new_target": new_target
+                            })
                     
                     # 모든 플레이어에게 알림
                     await manager.broadcast_to_room(room.room_id, {
