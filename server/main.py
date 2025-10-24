@@ -24,7 +24,7 @@ app.add_middleware(
 
 # Room/Lobby system
 class Room:
-    def __init__(self, room_id: str, room_name: str, host_id: str, max_players: int = 8, item_mode: bool = False):
+    def __init__(self, room_id: str, room_name: str, host_id: str, max_players: int = 16, item_mode: bool = False):
         self.room_id = room_id
         self.room_name = room_name
         self.host_id = host_id
@@ -180,7 +180,7 @@ class LobbyManager:
         self.rooms: Dict[str, Room] = {}
         self.player_rooms: Dict[str, str] = {}  # player_id -> room_id
 
-    def create_room(self, room_name: str, host_id: str, host_name: str, max_players: int = 8, item_mode: bool = False) -> Room:
+    def create_room(self, room_name: str, host_id: str, host_name: str, max_players: int = 16, item_mode: bool = False) -> Room:
         room_id = f"room_{random.randint(1000, 9999)}"
         while room_id in self.rooms:
             room_id = f"room_{random.randint(1000, 9999)}"
@@ -303,7 +303,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     message["room_name"],
                     client_id,
                     message["player_name"],
-                    message.get("max_players", 4),
+                    message.get("max_players", 16),
                     message.get("item_mode", False)
                 )
                 await manager.send_to_player(client_id, {
@@ -619,28 +619,26 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 # Static files
 static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
+static_react_dir = Path(__file__).parent / "static-react"
+static_react_dir.mkdir(exist_ok=True)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-# API endpoints
+# API endpoints (먼저 정의)
 @app.get("/api")
-async def read_root():
+async def api_info():
     return {"message": "Tetris Multiplayer Server"}
 
+@app.get("/v2")
+async def serve_react():
+    # Green: React 버전
+    return FileResponse("server/static-react/index.html")
+
 @app.get("/")
-async def serve_index():
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(
-            index_path,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0"
-            }
-        )
-    return {"message": "Tetris Multiplayer Server - Frontend not found. Access /api for API info."}
+async def serve_vanilla():
+    # Blue: 바닐라 JS 버전
+    return FileResponse("server/static/index.html")
+
+# Mount static files (라우트 뒤에)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

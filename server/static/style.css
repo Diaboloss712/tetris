@@ -274,7 +274,7 @@ body {
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
-    padding: 20px;
+    padding: 20px 20px 200px 20px;
 }
 
 .game-sidebar {
@@ -388,53 +388,47 @@ body {
     bottom: 15px;
     left: 50%;
     transform: translateX(-50%);
-    display: flex;
-    gap: 12px;
+    display: grid;
+    gap: 8px;
     z-index: 10;
-    padding: 12px 15px;
+    padding: 10px;
     background: rgba(0, 0, 0, 0.85);
     border-radius: 12px;
     box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.5);
-    max-width: 90vw;
-    overflow-x: auto;
-    overflow-y: hidden;
     pointer-events: auto;
-}
-
-.game-players-list::-webkit-scrollbar {
-    height: 6px;
-}
-
-.game-players-list::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
-}
-
-.game-players-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
-}
-
-.game-players-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5);
 }
 
 .game-player {
     background: linear-gradient(135deg, #2a2a3e 0%, #1a1a2e 100%);
     border-radius: 10px;
-    padding: 10px;
+    padding: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
     transition: all 0.3s ease;
     cursor: pointer;
     position: relative;
-    min-width: 100px;
-    max-width: 120px;
     border: 2px solid rgba(255, 255, 255, 0.1);
 }
 
 .game-player:hover {
-    transform: translateY(-5px);
+    transform: translateY(-3px);
     border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 플레이어 수에 따른 크기 조정 */
+.game-players-list.size-1 .game-player {
+    width: 160px;
+}
+
+.game-players-list.size-3 .game-player {
+    width: 130px;
+}
+
+.game-players-list.size-7 .game-player {
+    width: 110px;
+}
+
+.game-players-list.size-15 .game-player {
+    width: 90px;
 }
 
 .game-player.me {

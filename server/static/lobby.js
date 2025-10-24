@@ -746,7 +746,39 @@ class LobbyManager {
         // 죽은 플레이어 추적용 (game_over 상태 저장)
         if (!this.deadPlayers) this.deadPlayers = new Set();
 
-        // TETR.IO 스타일: 가로 한 줄 배치 (flex)
+        // 자신 제외한 플레이어 수
+        const otherPlayersCount = this.currentRoom.players.length - 1;
+        
+        // 플레이어 수에 따른 그리드 레이아웃 결정
+        let gridCols, gridRows, sizeClass;
+        if (otherPlayersCount <= 1) {
+            // 1:1 상황
+            gridCols = 1;
+            gridRows = 1;
+            sizeClass = 'size-1';
+        } else if (otherPlayersCount <= 3) {
+            // 2~4명
+            gridCols = 2;
+            gridRows = 2;
+            sizeClass = 'size-3';
+        } else if (otherPlayersCount <= 7) {
+            // 5~8명
+            gridCols = 4;
+            gridRows = 2;
+            sizeClass = 'size-7';
+        } else {
+            // 9~16명
+            gridCols = 4;
+            gridRows = 4;
+            sizeClass = 'size-15';
+        }
+        
+        // 그리드 레이아웃 및 크기 클래스 설정
+        list.style.gridTemplateColumns = `repeat(${gridCols}, 1fr)`;
+        list.className = `game-players-list ${sizeClass}`;
+        
+        console.log(`📊 플레이어 그리드: ${gridCols}x${gridRows} (${otherPlayersCount}명, ${sizeClass})`);
+
         this.currentRoom.players.forEach(player => {
             // 자신은 미니 그리드 표시 안함
             if (player.id === this.playerId) return;
