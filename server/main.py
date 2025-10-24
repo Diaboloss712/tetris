@@ -630,15 +630,29 @@ async def api_info():
 @app.get("/v2")
 async def serve_react():
     # Green: React 버전
-    return FileResponse("server/static-react/index.html")
+    react_index = static_react_dir / "index.html"
+    if not react_index.exists():
+        return {"error": "React build not found. Run 'npm run build' first."}
+    return FileResponse(str(react_index))
 
 @app.get("/")
 async def serve_vanilla():
     # Blue: 바닐라 JS 버전
-    return FileResponse("server/static/index.html")
+    return FileResponse(str(static_dir / "index.html"))
 
 # Mount static files (라우트 뒤에)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# React 빌드 파일 제공 (game.js 포함)
+@app.get("/game.js")
+async def serve_game_js():
+    game_js = static_react_dir / "game.js"
+    if game_js.exists():
+        return FileResponse(str(game_js), media_type="application/javascript")
+    return FileResponse(str(static_dir / "game.js"), media_type="application/javascript")
+
+# React assets 제공
+app.mount("/assets", StaticFiles(directory=str(static_react_dir / "assets")), name="react-assets")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
