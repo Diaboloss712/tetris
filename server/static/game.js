@@ -155,7 +155,8 @@ class TetrisGame {
                 shape: JSON.parse(JSON.stringify(this.shapes[this.heldPiece.shapeIndex])),
                 color: this.heldPiece.color,
                 x: Math.floor(this.cols / 2) - 1,
-                y: 0
+                y: 0,
+                rotation: 0
             };
             
             this.heldPiece = {
@@ -165,9 +166,13 @@ class TetrisGame {
             };
             
             this.currentPiece = temp;
-            this.currentPiece.x = Math.floor(this.cols / 2) - 1;
-            this.currentPiece.y = 0;
-            this.currentPiece.rotation = 0;
+        }
+        
+        // 새 블록이 유효한 위치인지 확인
+        if (!this.validMove(this.currentPiece)) {
+            console.log('💀 Hold 블록 배치 불가 - 게임 오버!');
+            this.gameOver = true;
+            return;
         }
         
         this.canHold = false;
@@ -586,6 +591,7 @@ class TetrisGame {
         this.lockResetCount = 0;
         
         if (!this.validMove(this.currentPiece)) {
+            console.log('💀 새 블록 배치 불가 - 게임 오버!');
             this.gameOver = true;
         }
         
@@ -833,6 +839,12 @@ class TetrisGame {
                     this.currentPiece.y = 0;
                     this.currentPiece.rotation = 0;
                     console.log('🔄 블록이 교체되었습니다!');
+                    
+                    // 새 블록이 유효한 위치인지 확인
+                    if (!this.validMove(this.currentPiece)) {
+                        console.log('💀 블록 교체 후 배치 불가 - 게임 오버!');
+                        this.gameOver = true;
+                    }
                 }
                 this.currentItem = null;
                 this.updateItemsUI();
@@ -881,6 +893,12 @@ class TetrisGame {
                         y: currentY,
                         rotation: 0
                     };
+                    
+                    // 새 블록이 유효한 위치인지 확인
+                    if (!this.validMove(this.currentPiece)) {
+                        console.log('💀 I블록으로 변경 후 배치 불가 - 게임 오버!');
+                        this.gameOver = true;
+                    }
                 }
                 console.log('📏 I블록으로 변경!');
                 this.currentItem = null;
@@ -1000,9 +1018,18 @@ class TetrisGame {
             
             // 다음 블록으로
             this.currentPiece = this.nextPiece;
+            this.currentPiece.x = Math.floor(this.cols / 2) - 1;
+            this.currentPiece.y = 0;
+            this.currentPiece.rotation = 0;
             this.nextPiece = this.createPiece();
             this.drawNextPiece();
             this.canHold = true;
+            
+            // 새 블록이 유효한 위치인지 확인
+            if (!this.validMove(this.currentPiece)) {
+                console.log('💀 유령 블록 고정 후 새 블록 배치 불가 - 게임 오버!');
+                this.gameOver = true;
+            }
             
             this.updateItemsUI();
             this.draw();
@@ -1044,6 +1071,12 @@ class TetrisGame {
                     this.lockDelayTimer = 0;
                     this.lockResetCount = 0;
                     console.log('🎲 상대가 블록을 교체했습니다! (현재 블록 사라짐)');
+                    
+                    // 새 블록이 유효한 위치인지 확인
+                    if (!this.validMove(this.currentPiece)) {
+                        console.log('💀 블록 교체 후 배치 불가 - 게임 오버!');
+                        this.gameOver = true;
+                    }
                 }
                 break;
                 
@@ -1094,6 +1127,12 @@ class TetrisGame {
             if (this.currentPiece) {
                 this.currentPiece = this.createPiece();
                 console.log('🔀 새 블록 생성');
+                
+                // 새 블록이 유효한 위치인지 확인
+                if (!this.validMove(this.currentPiece)) {
+                    console.log('💀 그리드 교체 후 블록 배치 불가 - 게임 오버!');
+                    this.gameOver = true;
+                }
             }
             
             this.draw();
