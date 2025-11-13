@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useGameStore } from '../store/gameStore'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { getWebSocketUrl } from '../utils/clientId'
 
 interface RoomProps {
   onBack: () => void
@@ -9,7 +10,7 @@ interface RoomProps {
 
 export default function Room({ onBack, onGameStart }: RoomProps) {
   const { playerId, currentRoom, setCurrentRoom } = useGameStore()
-  const { ws, send } = useWebSocket(`ws://${window.location.hostname}:8000/ws`)
+  const { ws, send } = useWebSocket(getWebSocketUrl())
   
   useEffect(() => {
     if (!ws) return
@@ -42,7 +43,9 @@ export default function Room({ onBack, onGameStart }: RoomProps) {
   const allReady = currentRoom.players.every(p => p.ready)
 
   const handleReady = () => {
-    send({ type: 'ready' })
+    // Toggle ready status
+    const newReadyStatus = !(myPlayer?.ready ?? false)
+    send({ type: 'ready', ready: newReadyStatus })
   }
 
   const handleStartGame = () => {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../store/gameStore'
 import { useWebSocket } from '../hooks/useWebSocket'
+import { getWebSocketUrl, generateClientId } from '../utils/clientId'
 
 interface LobbyProps {
   onNavigate: () => void
@@ -9,7 +10,22 @@ interface LobbyProps {
 export default function Lobby({ onNavigate }: LobbyProps) {
   const { playerName, setPlayerName, rooms, setRooms, setPlayerId, setCurrentRoom } = useGameStore()
   const [name, setName] = useState(playerName)
-  const { ws, connected, send } = useWebSocket(`ws://${window.location.hostname}:8000/ws`)
+  const { ws, connected, send } = useWebSocket(getWebSocketUrl())
+
+  // Set player ID on mount
+  useEffect(() => {
+    const clientId = generateClientId()
+    setPlayerId(clientId)
+    console.log('🆔 클라이언트 ID:', clientId)
+  }, [setPlayerId])
+
+  // Request room list when connected
+  useEffect(() => {
+    if (connected) {
+      console.log('✅ WebSocket 연결됨, 방 목록 요청')
+      send({ type: 'list_rooms' })
+    }
+  }, [connected, send])
 
   useEffect(() => {
     if (!ws) return
@@ -19,13 +35,6 @@ export default function Lobby({ onNavigate }: LobbyProps) {
       console.log('📨 메시지 수신:', data)
 
       switch (data.type) {
-        case 'player_id':
-          setPlayerId(data.player_id)
-          console.log('🆔 플레이어 ID:', data.player_id)
-          // 방 목록 요청
-          send({ type: 'get_rooms' })
-          break
-
         case 'room_list':
           setRooms(data.rooms)
           console.log('📋 방 목록:', data.rooms)
