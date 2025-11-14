@@ -65,9 +65,14 @@ class Room:
             self.players[player_id]["ready"] = ready
 
     def all_players_ready(self) -> bool:
+        """방장을 제외한 모든 플레이어가 준비되었는지 확인"""
         if len(self.players) < 1:
             return False
-        return all(player["ready"] for player in self.players.values())
+        # 방장을 제외한 플레이어들만 체크
+        non_host_players = [p for pid, p in self.players.items() if pid != self.host_id]
+        if len(non_host_players) == 0:
+            return True  # 방장 혼자면 바로 시작 가능
+        return all(player["ready"] for player in non_host_players)
 
     def start_game(self):
         self.game_active = True

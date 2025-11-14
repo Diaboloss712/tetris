@@ -29,25 +29,38 @@ export default function Game({ onBack }: GameProps) {
     const anyWindow = window as any
 
     const initGame = () => {
+      // 캔버스가 DOM에 확실히 준비될 때까지 기다림
+      const canvas = document.getElementById('game-canvas')
+      if (!canvas) {
+        console.warn('⏳ 캔버스가 아직 준비되지 않았습니다. 재시도 중...')
+        setTimeout(initGame, 100)
+        return
+      }
+
       if (canvasRef.current && anyWindow.TetrisGame) {
-        gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
-        if (gameRef.current) {
-          gameRef.current.itemMode = itemMode
+        try {
+          gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
+          if (gameRef.current) {
+            gameRef.current.itemMode = itemMode
+          }
+          console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
+        } catch (error) {
+          console.error('❌ 게임 초기화 실패:', error)
         }
-        console.log('✅ 테트리스 게임 시작!')
       }
     }
 
     if (anyWindow.TetrisGame) {
-      // 이미 스크립트가 로드된 경우, 바로 게임 인스턴스 생성
-      initGame()
+      // 이미 스크립트가 로드된 경우, 약간의 지연 후 게임 인스턴스 생성 (DOM 준비 보장)
+      setTimeout(initGame, 50)
     } else {
       // 아직 로드되지 않았다면 한 번만 로드
       const script = document.createElement('script')
       script.src = '/game.js'
       script.async = true
       script.onload = () => {
-        initGame()
+        console.log('✅ game.js 로드 완료')
+        setTimeout(initGame, 50)  // DOM 준비를 위한 짧은 지연
       }
       script.onerror = () => {
         console.error('❌ game.js 로드 실패. public 폴더에 game.js 파일이 있는지 확인하세요.')
