@@ -22,12 +22,16 @@ interface GameStore {
   currentRoom: Room | null
   rooms: Room[]
   currentTarget: string | null
+  isSolo: boolean
+  itemMode: boolean
   
   setPlayerId: (id: string) => void
   setPlayerName: (name: string) => void
   setCurrentRoom: (room: Room | null) => void
   setRooms: (rooms: Room[]) => void
   setCurrentTarget: (target: string | null) => void
+  setIsSolo: (isSolo: boolean) => void
+  setItemMode: (itemMode: boolean) => void
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -36,10 +40,14 @@ export const useGameStore = create<GameStore>((set) => ({
   currentRoom: null,
   rooms: [],
   currentTarget: null,
+  isSolo: false,
+  itemMode: false,
   
   setPlayerId: (id) => set({ playerId: id }),
   setPlayerName: (name) => set({ playerName: name }),
   setCurrentRoom: (room) => set({ currentRoom: room }),
   setRooms: (rooms) => set({ rooms }),
   setCurrentTarget: (target) => set({ currentTarget: target }),
+  setIsSolo: (isSolo) => set({ isSolo }),
+  setItemMode: (itemMode) => set({ itemMode }),
 }))

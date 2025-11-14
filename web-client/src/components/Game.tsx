@@ -8,7 +8,7 @@ interface GameProps {
 export default function Game({ onBack }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const gameRef = useRef<any>(null)
-  const { currentRoom, playerId, currentTarget } = useGameStore()
+  const { currentRoom, playerId, currentTarget, isSolo, itemMode } = useGameStore()
   
   // 자신 제외한 플레이어 목록
   const otherPlayers = currentRoom?.players.filter(p => p.id !== playerId) || []
@@ -26,15 +26,17 @@ export default function Game({ onBack }: GameProps) {
   
   // 게임 로직 초기화
   useEffect(() => {
-    // 바닐라 JS 버전의 TetrisGame 사용 (임시)
-    // TODO: 나중에 WebSocket 연동
+    // 바닐라 JS 버전의 TetrisGame 사용
     const script = document.createElement('script')
     script.src = '/game.js' // public 폴더에서 로드
     script.async = true
     script.onload = () => {
       if (canvasRef.current && (window as any).TetrisGame) {
         gameRef.current = new (window as any).TetrisGame('game-canvas', true)
-        console.log('✅ 테트리스 게임 시작!')
+        if (gameRef.current) {
+          gameRef.current.itemMode = itemMode
+        }
+        console.log('✅ 테트리스 게임 시작!', { isSolo, itemMode })
       }
     }
     script.onerror = () => {
@@ -50,7 +52,7 @@ export default function Game({ onBack }: GameProps) {
         gameRef.current.stopGame()
       }
     }
-  }, [])
+  }, [itemMode, isSolo])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
@@ -107,7 +109,8 @@ export default function Game({ onBack }: GameProps) {
         </div>
       </div>
 
-      {/* 오른쪽: 플레이어 그리드 (동적 레이아웃) */}
+      {/* 오른쪽: 플레이어 그리드 (멀티플레이에서만 노출) */}
+      {!isSolo && (
       <div className="card space-y-3" style={{ width: 'fit-content' }}>
         <h3 className="text-sm font-bold">
           🎯 타겟: {currentTarget ? otherPlayers.find(p => p.id === currentTarget)?.name || '없음' : '없음'}
@@ -146,6 +149,7 @@ export default function Game({ onBack }: GameProps) {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

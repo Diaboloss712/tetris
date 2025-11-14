@@ -1,16 +1,15 @@
 import { useEffect } from 'react'
 import { useGameStore } from '../store/gameStore'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { getWebSocketUrl } from '../utils/clientId'
 
 interface RoomProps {
   onBack: () => void
   onGameStart: () => void
+  ws: WebSocket | null
+  send: (data: any) => void
 }
 
-export default function Room({ onBack, onGameStart }: RoomProps) {
-  const { playerId, currentRoom, setCurrentRoom } = useGameStore()
-  const { ws, send } = useWebSocket(getWebSocketUrl())
+export default function Room({ onBack, onGameStart, ws, send }: RoomProps) {
+  const { playerId, currentRoom, setCurrentRoom, setIsSolo, setItemMode, setCurrentTarget } = useGameStore()
   
   useEffect(() => {
     if (!ws) return
@@ -26,11 +25,14 @@ export default function Room({ onBack, onGameStart }: RoomProps) {
 
         case 'game_start':
           console.log('🎮 게임 시작!')
+          setIsSolo(false)
+          setItemMode(!!data.item_mode)
+          setCurrentTarget(data.initial_target ?? null)
           onGameStart()
           break
       }
     }
-  }, [ws, setCurrentRoom, onGameStart])
+  }, [ws, setCurrentRoom, onGameStart, setIsSolo, setItemMode, setCurrentTarget])
 
   if (!currentRoom) {
     return <div className="flex items-center justify-center min-h-screen">

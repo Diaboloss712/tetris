@@ -1,16 +1,30 @@
 import { useState, useEffect } from 'react'
 import { useGameStore } from '../store/gameStore'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { getWebSocketUrl, generateClientId } from '../utils/clientId'
+import { generateClientId } from '../utils/clientId'
 
 interface LobbyProps {
-  onNavigate: () => void
+  onNavigateToRoom: () => void
+  onNavigateToGame: () => void
+  ws: WebSocket | null
+  connected: boolean
+  send: (data: any) => void
 }
 
-export default function Lobby({ onNavigate }: LobbyProps) {
-  const { playerName, setPlayerName, rooms, setRooms, setPlayerId, setCurrentRoom } = useGameStore()
+export default function Lobby({ onNavigateToRoom, onNavigateToGame, ws, connected, send }: LobbyProps) {
+  const { 
+    playerName, 
+    setPlayerName, 
+    rooms, 
+    setRooms, 
+    setPlayerId, 
+    setCurrentRoom,
+    setIsSolo,
+    setItemMode,
+  } = useGameStore()
   const [name, setName] = useState(playerName)
-  const { ws, connected, send } = useWebSocket(getWebSocketUrl())
+  const [roomName, setRoomName] = useState('내 방')
+  const [roomItemMode, setRoomItemMode] = useState(false)
+  const [soloItemMode, setSoloItemMode] = useState(false)
 
   // Set player ID on mount
   useEffect(() => {
@@ -43,11 +57,13 @@ export default function Lobby({ onNavigate }: LobbyProps) {
         case 'room_joined':
           setCurrentRoom(data.room)
           console.log('✅ 방 입장:', data.room)
-          onNavigate()
+          setIsSolo(false)
+          setItemMode(!!data.room.item_mode)
+          onNavigateToRoom()
           break
       }
     }
-  }, [ws, send, setPlayerId, setRooms, setCurrentRoom, onNavigate])
+  }, [ws, send, setRooms, setCurrentRoom, onNavigateToRoom, setIsSolo, setItemMode])
 
   const handleCreateRoom = () => {
     if (!name.trim()) {
@@ -57,9 +73,10 @@ export default function Lobby({ onNavigate }: LobbyProps) {
     setPlayerName(name)
     send({
       type: 'create_room',
-      room_name: `${name}의 방`,
+      room_name: roomName.trim() || `${name}의 방`,
       player_name: name,
-      max_players: 16
+      max_players: 16,
+      item_mode: roomItemMode,
     })
   }
 
@@ -74,6 +91,17 @@ export default function Lobby({ onNavigate }: LobbyProps) {
       room_id: roomId,
       player_name: name
     })
+  }
+
+  const handleStartSolo = () => {
+    if (!name.trim()) {
+      alert('이름을 입력하세요')
+      return
+    }
+    setPlayerName(name)
+    setIsSolo(true)
+    setItemMode(soloItemMode)
+    onNavigateToGame()
   }
 
   return (
@@ -106,10 +134,48 @@ export default function Lobby({ onNavigate }: LobbyProps) {
           />
         </div>
 
-        <div className="flex gap-3 mb-8">
-          <button className="btn-primary flex-1" onClick={handleCreateRoom} disabled={!connected}>
-            방 만들기
-          </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div className="p-3 border rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold">🎮 혼자 하기</span>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={soloItemMode}
+                  onChange={(e) => setSoloItemMode(e.target.checked)}
+                />
+                아이템 모드
+              </label>
+            </div>
+            <button className="btn-secondary w-full" onClick={handleStartSolo}>
+              싱글플레이 시작
+            </button>
+          </div>
+
+          <div className="p-3 border rounded-lg space-y-2">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">방 이름</label>
+              <input
+                type="text"
+                placeholder="방 이름을 입력하세요"
+                maxLength={20}
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md text-sm"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={roomItemMode}
+                onChange={(e) => setRoomItemMode(e.target.checked)}
+              />
+              아이템 모드 (랜덤 아이템 생성)
+            </label>
+            <button className="btn-primary w-full" onClick={handleCreateRoom} disabled={!connected}>
+              방 만들기
+            </button>
+          </div>
         </div>
 
         <div>
