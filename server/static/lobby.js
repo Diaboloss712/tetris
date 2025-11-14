@@ -749,7 +749,8 @@ class LobbyManager {
         // 자신 제외한 플레이어 수
         const otherPlayersCount = this.currentRoom.players.length - 1;
         
-        // 플레이어 수에 따른 그리드 레이아웃 결정
+        // v2(Game.tsx)와 동일한 그리드 레이아웃 규칙 적용
+        // <=1: 1x1, <=3: 2x2, <=7: 2x4, 그 이상: 4x4
         let gridCols, gridRows, sizeClass;
         if (otherPlayersCount <= 1) {
             // 1:1 상황
@@ -762,9 +763,9 @@ class LobbyManager {
             gridRows = 2;
             sizeClass = 'size-3';
         } else if (otherPlayersCount <= 7) {
-            // 5~8명
-            gridCols = 4;
-            gridRows = 2;
+            // 5~8명: 세로 4줄, 가로 2칸 (v2와 동일)
+            gridCols = 2;
+            gridRows = 4;
             sizeClass = 'size-7';
         } else {
             // 9~16명
