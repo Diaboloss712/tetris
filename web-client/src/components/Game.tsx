@@ -99,38 +99,51 @@ export default function Game({ onBack }: GameProps) {
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
       {/* 왼쪽 사이드바 */}
       <div className="card w-44 space-y-4">
+        {/* Hold 영역 */}
         <div>
           <h3 className="text-sm font-bold mb-2">Hold (C7)</h3>
           <div className="bg-gray-100 rounded-lg h-20 flex items-center justify-center">
-            <span className="text-gray-400 text-xs">홀드 블록</span>
+            <canvas
+              id="hold-piece-canvas"
+              width={100}
+              height={80}
+              className="bg-black rounded"
+            />
           </div>
         </div>
         
+        {/* Next 영역 */}
         <div>
           <h3 className="text-sm font-bold mb-2">다음 블록</h3>
           <div className="bg-gray-100 rounded-lg h-20 flex items-center justify-center">
-            <span className="text-gray-400 text-xs">Next</span>
+            <canvas
+              id="next-piece-canvas"
+              width={100}
+              height={80}
+              className="bg-black rounded"
+            />
           </div>
         </div>
-        
+
+        {/* Stats 영역 */}
         <div>
           <h3 className="text-sm font-bold mb-2">Stats</h3>
           <div className="space-y-1 text-xs">
             <div className="flex justify-between">
               <span>점수:</span>
-              <span className="font-bold">0</span>
+              <span id="score" className="font-bold">0</span>
             </div>
             <div className="flex justify-between">
               <span>레벨:</span>
-              <span className="font-bold">1</span>
+              <span id="level" className="font-bold">1</span>
             </div>
             <div className="flex justify-between">
               <span>라인:</span>
-              <span className="font-bold">0</span>
+              <span id="lines" className="font-bold">0</span>
             </div>
           </div>
         </div>
-        
+
         <button className="btn-secondary w-full text-xs py-2" onClick={onBack}>
           나가기
         </button>
