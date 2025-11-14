@@ -24,29 +24,43 @@ export default function Game({ onBack }: GameProps) {
   
   const layout = getGridLayout(playerCount)
   
-  // 게임 로직 초기화: 마운트 시 한 번만 game.js 로드 및 TetrisGame 생성
+  // 게임 로직 초기화: 페이지당 한 번만 game.js 로드, 이미 로드됐다면 재사용
   useEffect(() => {
-    const script = document.createElement('script')
-    script.src = '/game.js' // public 폴더에서 로드
-    script.async = true
-    script.onload = () => {
-      if (canvasRef.current && (window as any).TetrisGame) {
-        gameRef.current = new (window as any).TetrisGame('game-canvas', true)
+    const anyWindow = window as any
+
+    const initGame = () => {
+      if (canvasRef.current && anyWindow.TetrisGame) {
+        gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
+        if (gameRef.current) {
+          gameRef.current.itemMode = itemMode
+        }
         console.log('✅ 테트리스 게임 시작!')
       }
     }
-    script.onerror = () => {
-      console.error('❌ game.js 로드 실패. public 폴더에 game.js 파일이 있는지 확인하세요.')
-    }
-    document.body.appendChild(script)
-    
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script)
+
+    if (anyWindow.TetrisGame) {
+      // 이미 스크립트가 로드된 경우, 바로 게임 인스턴스 생성
+      initGame()
+    } else {
+      // 아직 로드되지 않았다면 한 번만 로드
+      const script = document.createElement('script')
+      script.src = '/game.js'
+      script.async = true
+      script.onload = () => {
+        initGame()
       }
+      script.onerror = () => {
+        console.error('❌ game.js 로드 실패. public 폴더에 game.js 파일이 있는지 확인하세요.')
+      }
+      document.body.appendChild(script)
+    }
+
+    return () => {
+      // 스크립트는 그대로 두고, 게임 인스턴스만 정리
       if (gameRef.current && gameRef.current.stopGame) {
         gameRef.current.stopGame()
       }
+      gameRef.current = null
     }
   }, [])
 
