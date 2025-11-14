@@ -31,22 +31,33 @@ export default function Game({ onBack }: GameProps) {
     const initGame = () => {
       // 캔버스가 DOM에 확실히 준비될 때까지 기다림
       const canvas = document.getElementById('game-canvas')
+      console.log('🔍 initGame 호출 - canvas:', canvas, 'canvasRef.current:', canvasRef.current, 'TetrisGame:', anyWindow.TetrisGame)
+      
       if (!canvas) {
         console.warn('⏳ 캔버스가 아직 준비되지 않았습니다. 재시도 중...')
         setTimeout(initGame, 100)
         return
       }
 
-      if (canvasRef.current && anyWindow.TetrisGame) {
-        try {
-          gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
-          if (gameRef.current) {
-            gameRef.current.itemMode = itemMode
-          }
-          console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
-        } catch (error) {
-          console.error('❌ 게임 초기화 실패:', error)
+      if (!anyWindow.TetrisGame) {
+        console.error('❌ TetrisGame 클래스가 로드되지 않았습니다!')
+        return
+      }
+
+      if (!canvasRef.current) {
+        console.error('❌ canvasRef.current가 null입니다!')
+        return
+      }
+
+      try {
+        console.log('🎮 TetrisGame 생성 시작...')
+        gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
+        if (gameRef.current) {
+          gameRef.current.itemMode = itemMode
         }
+        console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
+      } catch (error) {
+        console.error('❌ 게임 초기화 실패:', error)
       }
     }
 

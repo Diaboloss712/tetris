@@ -1427,3 +1427,6 @@ class TetrisGame {
         this.draw();
     }
 }
+
+// TetrisGame을 전역으로 노출
+window.TetrisGame = TetrisGame;
