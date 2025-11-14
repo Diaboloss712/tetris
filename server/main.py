@@ -358,13 +358,22 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         })
                 
             elif message["type"] == "ready":
-                # Toggle ready status
+                # Toggle ready status (게임 시작은 start_game 메시지에서만)
                 room = lobby_manager.get_room_by_player(client_id)
                 if room:
                     room.set_ready(client_id, message["ready"])
                     
-                    # Start game if all ready
-                    if room.all_players_ready() and len(room.players) > 0:
+                    # 방 상태 업데이트만 브로드캐스트 (자동 시작 제거)
+                    await manager.broadcast_to_room(room.room_id, {
+                        "type": "room_update",
+                        "room": room.get_room_info()
+                    })
+            
+            elif message["type"] == "start_game":
+                # 방장이 게임 시작 (모두 준비되어야 함)
+                room = lobby_manager.get_room_by_player(client_id)
+                if room and room.host_id == client_id:  # 방장만 게임 시작 가능
+                    if room.all_players_ready():
                         room.start_game()
                         # 각 플레이어에게 개별적으로 타겟 정보 전송
                         for player_id in room.players:
@@ -377,10 +386,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         
                         # 서버 게임 틱 시작
                         room.game_tick_task = asyncio.create_task(game_tick_loop(room, manager))
+                        print(f"🎮 게임 시작: {room.room_name} (방장: {room.players[client_id]['name']})")
                     else:
-                        await manager.broadcast_to_room(room.room_id, {
-                            "type": "room_update",
-                            "room": room.get_room_info()
+                        # 모두 준비되지 않았으면 에러 메시지
+                        await manager.send_to_player(client_id, {
+                            "type": "error",
+                            "message": "모든 플레이어가 준비되지 않았습니다."
                         })
                 
             elif message["type"] == "update_grid":

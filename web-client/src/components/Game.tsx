@@ -67,10 +67,10 @@ export default function Game({ onBack }: GameProps) {
     } else {
       // 아직 로드되지 않았다면 한 번만 로드
       const script = document.createElement('script')
-      script.src = '/game.js'
+      script.src = `/game.js?v=${Date.now()}`  // 캐시 방지
       script.async = true
       script.onload = () => {
-        console.log('✅ game.js 로드 완료')
+        console.log('✅ game.js 로드 완료, window.TetrisGame:', anyWindow.TetrisGame)
         setTimeout(initGame, 50)  // DOM 준비를 위한 짧은 지연
       }
       script.onerror = () => {
