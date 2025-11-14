@@ -24,19 +24,15 @@ export default function Game({ onBack }: GameProps) {
   
   const layout = getGridLayout(playerCount)
   
-  // 게임 로직 초기화
+  // 게임 로직 초기화: 마운트 시 한 번만 game.js 로드 및 TetrisGame 생성
   useEffect(() => {
-    // 바닐라 JS 버전의 TetrisGame 사용
     const script = document.createElement('script')
     script.src = '/game.js' // public 폴더에서 로드
     script.async = true
     script.onload = () => {
       if (canvasRef.current && (window as any).TetrisGame) {
         gameRef.current = new (window as any).TetrisGame('game-canvas', true)
-        if (gameRef.current) {
-          gameRef.current.itemMode = itemMode
-        }
-        console.log('✅ 테트리스 게임 시작!', { isSolo, itemMode })
+        console.log('✅ 테트리스 게임 시작!')
       }
     }
     script.onerror = () => {
@@ -52,7 +48,14 @@ export default function Game({ onBack }: GameProps) {
         gameRef.current.stopGame()
       }
     }
-  }, [itemMode, isSolo])
+  }, [])
+
+  // 아이템 모드 변경 시 인스턴스에 반영
+  useEffect(() => {
+    if (gameRef.current) {
+      gameRef.current.itemMode = itemMode
+    }
+  }, [itemMode])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">

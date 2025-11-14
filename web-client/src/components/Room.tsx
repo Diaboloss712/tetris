@@ -42,7 +42,9 @@ export default function Room({ onBack, onGameStart, ws, send }: RoomProps) {
 
   const myPlayer = currentRoom.players.find(p => p.id === playerId)
   const isHost = currentRoom.host_id === playerId
-  const allReady = currentRoom.players.every(p => p.ready)
+  // 방장은 ready 버튼이 없으므로, host를 제외한 플레이어가 모두 ready인지 기준으로 계산
+  const nonHostPlayers = currentRoom.players.filter(p => p.id !== currentRoom.host_id)
+  const allReady = nonHostPlayers.length > 0 && nonHostPlayers.every(p => p.ready)
 
   const handleReady = () => {
     // Toggle ready status
