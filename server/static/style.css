@@ -419,6 +419,10 @@ body {
     width: 160px;
 }
 
+.game-players-list.size-1-small .game-player {
+    width: 110px;
+}
+
 .game-players-list.size-3 .game-player {
     width: 130px;
 }

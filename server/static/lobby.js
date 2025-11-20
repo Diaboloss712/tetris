@@ -584,8 +584,8 @@ class LobbyManager {
         this.currentTarget = initialTarget;
         console.log(`🎯 초기 타겟 설정: ID=${this.currentTarget}, 이름=${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
 
-        // 멀티플레이에서는 autoStart=false로 생성 (수동으로 게임 루프 시작)
-        window.game = new TetrisGame('game-canvas', false);
+        // 멀티플레이에서는 autoStart=true로 생성 (자동으로 게임 루프 시작)
+        window.game = new TetrisGame('game-canvas', true);
         window.game.itemMode = itemMode;
 
         document.getElementById('items-section').style.display = itemMode ? 'block' : 'none';
@@ -615,9 +615,6 @@ class LobbyManager {
                 this.startSpectating(); // 관전 모드 시작
             }
         }, 100); // 100ms마다 동기화 및 게임 오버 체크
-        
-        // 서버 틱 기반 게임 루프 (클라이언트 루프 제거)
-        console.log('🎮 서버 틱 기반 게임 시작! 비활성 탭에서도 정상 동작합니다.');
     }
     
     setupKeyboardControls() {
@@ -750,13 +747,13 @@ class LobbyManager {
         const otherPlayersCount = this.currentRoom.players.length - 1;
         
         // v2(Game.tsx)와 동일한 그리드 레이아웃 규칙 적용
-        // <=1: 1x1, <=3: 2x2, <=7: 2x4, 그 이상: 4x4
+        // <=1: 1x1 (작은 크기), <=3: 2x2, <=7: 2x4, 그 이상: 4x4
         let gridCols, gridRows, sizeClass;
         if (otherPlayersCount <= 1) {
-            // 1:1 상황
+            // 1:1 상황 - 작은 크기로 설정
             gridCols = 1;
             gridRows = 1;
-            sizeClass = 'size-1';
+            sizeClass = 'size-1-small';
         } else if (otherPlayersCount <= 3) {
             // 2~4명
             gridCols = 2;
