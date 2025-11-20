@@ -94,8 +94,26 @@ class TetrisGame {
     }
     
     startGameLoop() {
+        let lastTimestamp = performance.now();
+        
+        // 비활성 탭에서 느려지는 문제 해결
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                lastTimestamp = performance.now();
+                this.lastFallTime = performance.now();
+            }
+        });
+        
         const gameLoop = (timestamp) => {
             if (!this.gameOver) {
+                // 탭이 비활성화되었다 돌아올 때 시간 점프 방지
+                const delta = timestamp - lastTimestamp;
+                if (delta > 1000) {
+                    lastTimestamp = timestamp;
+                    this.lastFallTime = timestamp;
+                }
+                lastTimestamp = timestamp;
+                
                 this.update(timestamp);
                 requestAnimationFrame(gameLoop);
             }

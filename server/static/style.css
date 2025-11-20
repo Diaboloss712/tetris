@@ -414,6 +414,21 @@ body {
     border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* 관전 모드 컨트롤 */
+.spectate-controls {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.spectate-controls .btn {
+    padding: 12px 24px;
+    font-size: 1em;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
 /* 플레이어 수에 따른 크기 조정 */
 .game-players-list.size-1 .game-player {
     width: 160px;

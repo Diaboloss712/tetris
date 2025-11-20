@@ -24,45 +24,28 @@ export default function Game({ onBack }: GameProps) {
   
   const layout = getGridLayout(playerCount)
   
-  // 키보드 컨트롤 설정 (v1 방식)
+  // 키보드 컨트롤 설정
   const setupKeyboardControls = () => {
-    console.log('🎮 키보드 이벤트 리스너 등록 시작')
-    
     const handleKeyDown = (e: KeyboardEvent) => {
-      console.log('🎮 키 입력:', e.key, 'gameRef:', !!gameRef.current, 'gameOver:', gameRef.current?.gameOver)
-      
-      if (!gameRef.current) {
-        console.warn('⚠️ gameRef.current가 null입니다!')
-        return
-      }
-      
-      if (gameRef.current.gameOver) {
-        console.warn('⚠️ 게임이 종료되었습니다!')
-        return
-      }
-
-      console.log('✅ 게임 메서드 호출 시도:', e.key)
+      if (!gameRef.current || gameRef.current.gameOver) return
 
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault()
           gameRef.current.moveLeft()
           gameRef.current.draw()
-          console.log('← 왼쪽 이동')
           break
         case 'ArrowRight':
           e.preventDefault()
           gameRef.current.moveRight()
           gameRef.current.draw()
-          console.log('→ 오른쪽 이동')
           break
         case 'ArrowDown':
           e.preventDefault()
           if (gameRef.current.moveDown()) {
-            gameRef.current.score += 1 // 소프트 드롭 점수
+            gameRef.current.score += 1
           }
           gameRef.current.draw()
-          console.log('↓ 아래 이동')
           break
         case 'ArrowUp':
         case 'x':
@@ -70,7 +53,6 @@ export default function Game({ onBack }: GameProps) {
           e.preventDefault()
           gameRef.current.rotate(true)
           gameRef.current.draw()
-          console.log('🔄 시계방향 회전')
           break
         case 'z':
         case 'Z':
@@ -78,7 +60,6 @@ export default function Game({ onBack }: GameProps) {
           e.preventDefault()
           gameRef.current.rotate(false)
           gameRef.current.draw()
-          console.log('🔄 반시계방향 회전')
           break
         case 'c':
         case 'C':
@@ -86,18 +67,15 @@ export default function Game({ onBack }: GameProps) {
           e.preventDefault()
           gameRef.current.holdPiece()
           gameRef.current.draw()
-          console.log('📦 Hold')
           break
         case ' ':
           e.preventDefault()
           gameRef.current.hardDrop()
           gameRef.current.draw()
-          console.log('⬇️ 하드드롭')
           break
       }
     }
 
-    console.log('✅ 키보드 이벤트 리스너 등록 완료!')
     document.addEventListener('keydown', handleKeyDown)
   }
   
@@ -106,64 +84,39 @@ export default function Game({ onBack }: GameProps) {
     const anyWindow = window as any
 
     const initGame = () => {
-      // 캔버스가 DOM에 확실히 준비될 때까지 기다림
       const canvas = document.getElementById('game-canvas')
-      console.log('🔍 initGame 호출 - canvas:', canvas, 'canvasRef.current:', canvasRef.current, 'TetrisGame:', anyWindow.TetrisGame)
       
       if (!canvas) {
-        console.warn('⏳ 캔버스가 아직 준비되지 않았습니다. 재시도 중...')
         setTimeout(initGame, 100)
         return
       }
 
-      if (!anyWindow.TetrisGame) {
-        console.error('❌ TetrisGame 클래스가 로드되지 않았습니다!')
-        return
-      }
-
-      if (!canvasRef.current) {
-        console.error('❌ canvasRef.current가 null입니다!')
-        return
-      }
+      if (!anyWindow.TetrisGame || !canvasRef.current) return
 
       try {
-        console.log('🎮 TetrisGame 생성 시작...')
         gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
         if (gameRef.current) {
           gameRef.current.itemMode = itemMode
         }
-        console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
-        
-        // 게임 초기화 직후 키보드 리스너 등록 (v1 방식)
         setupKeyboardControls()
       } catch (error) {
-        console.error('❌ 게임 초기화 실패:', error)
+        console.error('게임 초기화 실패:', error)
       }
     }
 
     if (anyWindow.TetrisGame) {
-      // 이미 스크립트가 로드된 경우, 약간의 지연 후 게임 인스턴스 생성 (DOM 준비 보장)
       setTimeout(initGame, 50)
     } else {
-      // 아직 로드되지 않았다면 한 번만 로드
       const script = document.createElement('script')
-      script.src = `/game.js?v=${Date.now()}`  // 캐시 방지
+      script.src = `/game.js?v=${Date.now()}`
       script.async = true
-      script.onload = () => {
-        console.log('✅ game.js 로드 완료, window.TetrisGame:', anyWindow.TetrisGame)
-        setTimeout(initGame, 50)  // DOM 준비를 위한 짧은 지연
-      }
-      script.onerror = () => {
-        console.error('❌ game.js 로드 실패. public 폴더에 game.js 파일이 있는지 확인하세요.')
-      }
+      script.onload = () => setTimeout(initGame, 50)
+      script.onerror = () => console.error('game.js 로드 실패')
       document.body.appendChild(script)
     }
 
     return () => {
-      // 스크립트는 그대로 두고, 게임 인스턴스만 정리
-      if (gameRef.current && gameRef.current.stopGame) {
-        gameRef.current.stopGame()
-      }
+      if (gameRef.current?.stopGame) gameRef.current.stopGame()
       gameRef.current = null
     }
   }, [])

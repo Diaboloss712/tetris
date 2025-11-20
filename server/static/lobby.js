@@ -56,6 +56,8 @@ class LobbyManager {
         document.getElementById('leave-room-btn').onclick = () => this.leaveRoom();
         document.getElementById('return-lobby-btn').onclick = () => this.returnToLobby();
         document.getElementById('restart-game-btn').onclick = () => this.restartGame();
+        document.getElementById('spectate-btn').onclick = () => this.startSpectating();
+        document.getElementById('stop-spectate-btn').onclick = () => this.stopSpectating();
     }
     
     connect() {
@@ -145,6 +147,12 @@ class LobbyManager {
                 this.updateGamePlayersList();
                 this.updateTargetDisplay();
                 console.log(`🎯 타겟 변경됨: ${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
+                break;
+            case 'game_tick':
+                // 서버 틱으로 게임 속도 동기화 (모든 플레이어 같은 속도)
+                if (window.game && !window.game.gameOver) {
+                    window.game.update(performance.now());
+                }
                 break;
             case 'game_state_update':
                 // 다른 플레이어의 미니 그리드 업데이트
@@ -578,8 +586,8 @@ class LobbyManager {
         this.currentTarget = initialTarget;
         console.log(`🎯 초기 타겟 설정: ID=${this.currentTarget}, 이름=${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
 
-        // 멀티플레이에서는 autoStart=true로 생성 (자동으로 게임 루프 시작)
-        window.game = new TetrisGame('game-canvas', true);
+        // 멀티플레이에서는 autoStart=false (서버 틱으로 속도 동기화)
+        window.game = new TetrisGame('game-canvas', false);
         window.game.itemMode = itemMode;
 
         document.getElementById('items-section').style.display = itemMode ? 'block' : 'none';
@@ -688,7 +696,6 @@ class LobbyManager {
         
         // 블록이 없으면 조작 불가 (merge 중)
         if (!window.game.currentPiece) {
-            console.log('⚠️ 블록 고정 중 - 조작 불가');
             return;
         }
         
@@ -705,6 +712,9 @@ class LobbyManager {
             case 'hold': window.game.holdPiece(); break;
             case 'hard_drop': window.game.hardDrop(); break;
         }
+        
+        // 즉시 화면 업데이트
+        window.game.draw();
     }
     
     setTarget(targetId) {
@@ -944,10 +954,26 @@ class LobbyManager {
     
     handleGameOver() {
         console.log('게임 오버!');
-        document.getElementById('game-over-overlay').style.display = 'flex';
+        
+        // 점수/라인 표시
         document.getElementById('final-score').textContent = window.game.score;
         document.getElementById('final-lines').textContent = window.game.lines;
         document.getElementById('final-level').textContent = window.game.level;
+        
+        // 멀티플레이에서는 관전 버튼 표시
+        const spectateBtn = document.getElementById('spectate-btn');
+        if (!this.isSoloMode && this.currentRoom) {
+            // 살아있는 플레이어가 있는지 확인
+            const alivePlayers = this.currentRoom.players.filter(p => 
+                p.id !== this.playerId && !this.deadPlayers.has(p.id)
+            );
+            spectateBtn.style.display = alivePlayers.length > 0 ? 'inline-block' : 'none';
+        } else {
+            spectateBtn.style.display = 'none';
+        }
+        
+        // 오버레이 표시
+        document.getElementById('game-over-overlay').style.display = 'flex';
         
         this.send({
             type: 'game_over'
@@ -973,6 +999,9 @@ class LobbyManager {
         
         // 게임 오버 오버레이 숨기기
         document.getElementById('game-over-overlay').style.display = 'none';
+        
+        // 관전 컨트롤 표시
+        document.getElementById('spectate-controls').style.display = 'block';
         
         // 관전 모드 표시
         this.updateSpectateDisplay();
@@ -1008,6 +1037,28 @@ class LobbyManager {
         if (this.spectateInterval) {
             clearInterval(this.spectateInterval);
             this.spectateInterval = null;
+        }
+        
+        // 관전 컨트롤 숨기기
+        document.getElementById('spectate-controls').style.display = 'none';
+        
+        // 게임 오버 오버레이 다시 표시
+        document.getElementById('game-over-overlay').style.display = 'flex';
+        
+        // 타겟 표시 원래대로
+        const targetDisplay = document.getElementById('current-target-display');
+        if (targetDisplay) {
+            targetDisplay.textContent = `🎯 타겟: ${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`;
+            targetDisplay.style.background = '';
+        }
+        
+        // 메인 캔버스 초기화
+        const canvas = document.getElementById('game-canvas');
+        if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
     }
     
