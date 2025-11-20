@@ -16,7 +16,7 @@ export default function Game({ onBack }: GameProps) {
   
   // 플레이어 수에 따른 그리드 레이아웃
   const getGridLayout = (count: number) => {
-    if (count <= 1) return { cols: 1, rows: 1, size: 'w-32 h-48' }
+    if (count <= 1) return { cols: 1, rows: 1, size: 'w-20 h-32' }
     if (count <= 3) return { cols: 2, rows: 2, size: 'w-24 h-36' }
     if (count <= 7) return { cols: 2, rows: 4, size: 'w-20 h-32' }
     return { cols: 4, rows: 4, size: 'w-16 h-24' }
@@ -94,6 +94,53 @@ export default function Game({ onBack }: GameProps) {
       gameRef.current.itemMode = itemMode
     }
   }, [itemMode])
+
+  // 키보드 컨트롤
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!gameRef.current || gameRef.current.gameOver) return
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          gameRef.current.moveLeft()
+          break
+        case 'ArrowRight':
+          gameRef.current.moveRight()
+          break
+        case 'ArrowDown':
+          if (gameRef.current.moveDown()) {
+            gameRef.current.score += 1 // 소프트 드롭 점수
+          }
+          break
+        case 'ArrowUp':
+        case 'x':
+        case 'X':
+          gameRef.current.rotate(true)
+          break
+        case 'z':
+        case 'Z':
+        case 'Control':
+          e.preventDefault()
+          gameRef.current.rotate(false)
+          break
+        case 'c':
+        case 'C':
+        case 'Shift':
+          e.preventDefault()
+          gameRef.current.holdPiece()
+          break
+        case ' ':
+          e.preventDefault()
+          gameRef.current.hardDrop()
+          break
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
@@ -101,7 +148,7 @@ export default function Game({ onBack }: GameProps) {
       <div className="card w-44 space-y-4">
         {/* Hold 영역 */}
         <div>
-          <h3 className="text-sm font-bold mb-2">Hold (C7)</h3>
+          <h3 className="text-sm font-bold mb-2">Hold (C키)</h3>
           <div className="bg-gray-100 rounded-lg h-20 flex items-center justify-center">
             <canvas
               id="hold-piece-canvas"
