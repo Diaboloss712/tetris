@@ -98,46 +98,78 @@ export default function Game({ onBack }: GameProps) {
   // 키보드 컨트롤
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!gameRef.current || gameRef.current.gameOver) return
+      console.log('🎮 키 입력:', e.key, 'gameRef:', !!gameRef.current, 'gameOver:', gameRef.current?.gameOver)
+      
+      if (!gameRef.current) {
+        console.warn('⚠️ gameRef.current가 null입니다!')
+        return
+      }
+      
+      if (gameRef.current.gameOver) {
+        console.warn('⚠️ 게임이 종료되었습니다!')
+        return
+      }
+
+      console.log('✅ 게임 메서드 호출 시도:', e.key)
 
       switch (e.key) {
         case 'ArrowLeft':
+          e.preventDefault()
           gameRef.current.moveLeft()
+          gameRef.current.draw()
+          console.log('← 왼쪽 이동')
           break
         case 'ArrowRight':
+          e.preventDefault()
           gameRef.current.moveRight()
+          gameRef.current.draw()
+          console.log('→ 오른쪽 이동')
           break
         case 'ArrowDown':
+          e.preventDefault()
           if (gameRef.current.moveDown()) {
             gameRef.current.score += 1 // 소프트 드롭 점수
           }
+          gameRef.current.draw()
+          console.log('↓ 아래 이동')
           break
         case 'ArrowUp':
         case 'x':
         case 'X':
+          e.preventDefault()
           gameRef.current.rotate(true)
+          gameRef.current.draw()
+          console.log('🔄 시계방향 회전')
           break
         case 'z':
         case 'Z':
         case 'Control':
           e.preventDefault()
           gameRef.current.rotate(false)
+          gameRef.current.draw()
+          console.log('🔄 반시계방향 회전')
           break
         case 'c':
         case 'C':
         case 'Shift':
           e.preventDefault()
           gameRef.current.holdPiece()
+          gameRef.current.draw()
+          console.log('📦 Hold')
           break
         case ' ':
           e.preventDefault()
           gameRef.current.hardDrop()
+          gameRef.current.draw()
+          console.log('⬇️ 하드드롭')
           break
       }
     }
 
+    console.log('🎮 키보드 이벤트 리스너 등록')
     document.addEventListener('keydown', handleKeyDown)
     return () => {
+      console.log('🎮 키보드 이벤트 리스너 제거')
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
