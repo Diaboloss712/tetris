@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../store/gameStore'
 
 interface GameProps {
@@ -8,7 +8,10 @@ interface GameProps {
 export default function Game({ onBack }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const gameRef = useRef<any>(null)
-  const { currentRoom, playerId, currentTarget, isSolo, itemMode } = useGameStore()
+  const wsRef = useRef<WebSocket | null>(null)
+  const syncIntervalRef = useRef<any>(null)
+  const [otherPlayersData, setOtherPlayersData] = useState<Record<string, any>>({})
+  const { currentRoom, playerId, currentTarget, isSolo, itemMode, setCurrentTarget } = useGameStore()
   
   // 자신 제외한 플레이어 목록
   const otherPlayers = currentRoom?.players.filter(p => p.id !== playerId) || []
@@ -24,6 +27,82 @@ export default function Game({ onBack }: GameProps) {
   
   const layout = getGridLayout(playerCount)
   
+  // WebSocket 메시지 핸들러
+  const handleWebSocketMessage = (data: any) => {
+    switch (data.type) {
+      case 'game_state_update':
+        if (data.game_state && !isSolo) {
+          // 다른 플레이어들의 게임 상태 업데이트
+          setOtherPlayersData(prev => ({
+            ...prev,
+            [data.player_id]: {
+              grid: data.game_state.grid,
+              score: data.game_state.score,
+              lines: data.game_state.lines,
+              combo: data.game_state.combo
+            }
+          }))
+        }
+        break
+      case 'receive_attack':
+        if (gameRef.current && typeof gameRef.current.receiveAttack === 'function') {
+          gameRef.current.receiveAttack(data.lines)
+        }
+        break
+      case 'target_changed':
+        setCurrentTarget(data.new_target)
+        break
+    }
+  }
+
+  // 공격 전송 함수
+  const sendAttack = (lines: number, combo: number) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || isSolo) return
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'send_attack',
+      target_id: currentTarget,
+      lines,
+      combo
+    }))
+  }
+
+  // 게임 상태 동기화
+  const syncGameState = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !gameRef.current || isSolo) return
+    
+    wsRef.current.send(JSON.stringify({
+      type: 'update_grid',
+      grid: gameRef.current.grid,
+      score: gameRef.current.score,
+      level: gameRef.current.level,
+      lines: gameRef.current.lines,
+      combo: gameRef.current.combo
+    }))
+  }
+
+  // 타겟 전환
+  const switchTarget = () => {
+    if (isSolo || !currentRoom) return
+    
+    const aliveIds = otherPlayers.map(p => p.id)
+    if (aliveIds.length === 0) return
+    
+    const currentIndex = currentTarget ? aliveIds.indexOf(currentTarget) : -1
+    const nextIndex = (currentIndex + 1) % aliveIds.length
+    const newTarget = aliveIds[nextIndex]
+    
+    setCurrentTarget(newTarget)
+    
+    // 서버에 타겟 변경 알림
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'change_target',
+        target_id: newTarget
+      }))
+    }
+  }
+
   // 키보드 컨트롤 설정
   const setupKeyboardControls = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -73,6 +152,12 @@ export default function Game({ onBack }: GameProps) {
           gameRef.current.hardDrop()
           gameRef.current.draw()
           break
+        case 'Tab':
+          if (!isSolo) {
+            e.preventDefault()
+            switchTarget()
+          }
+          break
       }
     }
 
@@ -94,11 +179,63 @@ export default function Game({ onBack }: GameProps) {
       if (!anyWindow.TetrisGame || !canvasRef.current) return
 
       try {
+        // 멀티플레이에서는 autoStart=true (로컬 게임 루프)
         gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
         if (gameRef.current) {
           gameRef.current.itemMode = itemMode
         }
+        
+        // 전역 공격 함수 등록
+        anyWindow.sendAttack = sendAttack
+        
         setupKeyboardControls()
+        
+        // 멀티플레이어 WebSocket 연결
+        if (!isSolo && playerId) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+          const wsUrl = `${protocol}//${window.location.host}/ws/${playerId}`
+          
+          const ws = new WebSocket(wsUrl)
+          wsRef.current = ws
+          
+          ws.onopen = () => {
+            console.log('✅ WebSocket 연결됨')
+          }
+          
+          ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+              handleWebSocketMessage(data)
+            } catch (error) {
+              console.error('메시지 파싱 실패:', error)
+            }
+          }
+          
+          ws.onerror = (error) => {
+            console.error('WebSocket 에러:', error)
+          }
+          
+          ws.onclose = () => {
+            console.log('❌ WebSocket 연결 끊김')
+          }
+          
+          // 주기적으로 게임 상태 동기화 및 게임 오버 체크
+          syncIntervalRef.current = setInterval(() => {
+            syncGameState()
+            
+            // 게임 오버 체크
+            if (gameRef.current && gameRef.current.gameOver && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: 'game_over'
+              }))
+              // 한 번만 전송
+              if (syncIntervalRef.current) {
+                clearInterval(syncIntervalRef.current)
+                syncIntervalRef.current = null
+              }
+            }
+          }, 100)
+        }
       } catch (error) {
         console.error('게임 초기화 실패:', error)
       }
@@ -118,6 +255,18 @@ export default function Game({ onBack }: GameProps) {
     return () => {
       if (gameRef.current?.stopGame) gameRef.current.stopGame()
       gameRef.current = null
+      
+      // WebSocket 정리
+      if (wsRef.current) {
+        wsRef.current.close()
+        wsRef.current = null
+      }
+      
+      // 동기화 인터벌 정리
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current)
+        syncIntervalRef.current = null
+      }
     }
   }, [])
 
@@ -127,6 +276,34 @@ export default function Game({ onBack }: GameProps) {
       gameRef.current.itemMode = itemMode
     }
   }, [itemMode])
+
+  // UI 업데이트 (점수, 레벨, 라인, 받을 공격)
+  useEffect(() => {
+    const updateUI = () => {
+      if (!gameRef.current) return
+      
+      // Stats 업데이트
+      const scoreEl = document.getElementById('score')
+      const levelEl = document.getElementById('level')
+      const linesEl = document.getElementById('lines')
+      
+      if (scoreEl) scoreEl.textContent = gameRef.current.score.toString()
+      if (levelEl) levelEl.textContent = gameRef.current.level.toString()
+      if (linesEl) linesEl.textContent = gameRef.current.lines.toString()
+      
+      // 받을 공격 업데이트 (멀티플레이)
+      if (!isSolo) {
+        const pendingEl = document.getElementById('pending-garbage')
+        const incomingEl = document.getElementById('incoming-garbage')
+        
+        if (pendingEl) pendingEl.textContent = (gameRef.current.pendingGarbage || 0).toString()
+        if (incomingEl) incomingEl.textContent = (gameRef.current.incomingGarbage || 0).toString()
+      }
+    }
+    
+    const interval = setInterval(updateUI, 50)
+    return () => clearInterval(interval)
+  }, [isSolo])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
@@ -177,6 +354,23 @@ export default function Game({ onBack }: GameProps) {
           </div>
         </div>
 
+        {/* 받을 공격 표시 (멀티플레이에서만) */}
+        {!isSolo && (
+          <div className="bg-red-900 bg-opacity-30 rounded-lg p-2">
+            <h3 className="text-xs font-bold mb-2">⚠️ 받을 공격</h3>
+            <div className="flex gap-2 text-xs">
+              <div className="flex-1 text-center">
+                <div className="text-red-400 font-bold">🔴 확정</div>
+                <div id="pending-garbage" className="text-lg font-bold">0</div>
+              </div>
+              <div className="flex-1 text-center">
+                <div className="text-yellow-400 font-bold">🟡 대기</div>
+                <div id="incoming-garbage" className="text-lg font-bold">0</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <button className="btn-secondary w-full text-xs py-2" onClick={onBack}>
           나가기
         </button>
@@ -210,19 +404,49 @@ export default function Game({ onBack }: GameProps) {
             gridTemplateColumns: `repeat(${layout.cols}, minmax(0, 1fr))`,
           }}
         >
-          {otherPlayers.map((player) => (
-            <div 
-              key={player.id} 
-              className={`bg-tetris-card rounded-lg p-2 ${player.id === currentTarget ? 'ring-2 ring-red-500' : ''}`}
-            >
-              <p className="text-white text-xs mb-1 truncate">{player.name}</p>
-              <div className={`bg-black rounded ${layout.size}`}></div>
-              <div className="flex justify-between text-white text-xs mt-1">
-                <span>0점</span>
-                <span>0줄</span>
+          {otherPlayers.map((player) => {
+            const playerData = otherPlayersData[player.id] || { score: 0, lines: 0, grid: null }
+            return (
+              <div 
+                key={player.id} 
+                className={`bg-tetris-card rounded-lg p-2 ${player.id === currentTarget ? 'ring-2 ring-red-500' : ''}`}
+              >
+                <p className="text-white text-xs mb-1 truncate">{player.name}</p>
+                <canvas 
+                  id={`grid-${player.id}`}
+                  width={100}
+                  height={200}
+                  className={`bg-black rounded ${layout.size}`}
+                  ref={(canvas) => {
+                    if (canvas && playerData.grid) {
+                      const ctx = canvas.getContext('2d')
+                      if (ctx) {
+                        // 그리드 그리기
+                        const blockSize = 5
+                        const colors = ['#00ffff', '#ffff00', '#ff00ff', '#ffa500', '#0000ff', '#00ff00', '#ff0000']
+                        
+                        ctx.fillStyle = '#000'
+                        ctx.fillRect(0, 0, canvas.width, canvas.height)
+                        
+                        for (let y = 0; y < playerData.grid.length; y++) {
+                          for (let x = 0; x < playerData.grid[y].length; x++) {
+                            if (playerData.grid[y][x]) {
+                              ctx.fillStyle = colors[(playerData.grid[y][x] - 1) % colors.length]
+                              ctx.fillRect(x * blockSize, y * blockSize, blockSize - 1, blockSize - 1)
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }}
+                />
+                <div className="flex justify-between text-white text-xs mt-1">
+                  <span>{playerData.score}점</span>
+                  <span>{playerData.lines}줄</span>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
         
         {/* 조작법 */}
@@ -233,6 +457,7 @@ export default function Game({ onBack }: GameProps) {
             <div><kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">Space</kbd> 하드 드롭</div>
             <div><kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">Z/X</kbd> 회전</div>
             <div><kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">C</kbd> 홀드</div>
+            <div className="text-orange-500 font-bold"><kbd className="px-1 py-0.5 bg-gray-200 rounded text-xs">Tab</kbd> 타겟 전환 🎯</div>
           </div>
         </div>
       </div>
