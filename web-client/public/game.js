@@ -591,12 +591,7 @@ class TetrisGame {
         // 아이템 생성 (아이템 모드)
         this.generateItem();
         
-        // 쓰레기 라인 추가
-        if (this.pendingGarbage > 0) {
-            this.addGarbageLines(this.pendingGarbage);
-            this.pendingGarbage = 0;
-        }
-        
+        // 새 블럭을 먼저 스폰 (쓰레기 라인 추가 전에!)
         this.currentPiece = this.nextPiece;
         this.nextPiece = this.createPiece();
         this.drawNextPiece();
@@ -607,9 +602,17 @@ class TetrisGame {
         this.lockDelayTimer = 0;
         this.lockResetCount = 0;
         
+        // 새 블럭 유효성 체크 (쓰레기 추가 전)
         if (!this.validMove(this.currentPiece)) {
             console.log('💀 새 블록 배치 불가 - 게임 오버!');
             this.gameOver = true;
+        }
+        
+        // 쓰레기 라인 추가 (새 블럭 스폰 후)
+        // 이렇게 하면 새 블럭이 위로 밀려올라가도 이미 스폰은 완료된 상태
+        if (this.pendingGarbage > 0 && !this.gameOver) {
+            this.addGarbageLines(this.pendingGarbage);
+            this.pendingGarbage = 0;
         }
         
         // UI 업데이트 (한 번만)
