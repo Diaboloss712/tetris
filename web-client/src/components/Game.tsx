@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../store/gameStore'
 
 interface GameProps {
@@ -8,6 +8,7 @@ interface GameProps {
 export default function Game({ onBack }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const gameRef = useRef<any>(null)
+  const [gameReady, setGameReady] = useState(false)
   const { currentRoom, playerId, currentTarget, isSolo, itemMode } = useGameStore()
   
   // 자신 제외한 플레이어 목록
@@ -56,6 +57,7 @@ export default function Game({ onBack }: GameProps) {
           gameRef.current.itemMode = itemMode
         }
         console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
+        setGameReady(true) // 게임 준비 완료 플래그 설정
       } catch (error) {
         console.error('❌ 게임 초기화 실패:', error)
       }
@@ -97,6 +99,14 @@ export default function Game({ onBack }: GameProps) {
 
   // 키보드 컨트롤
   useEffect(() => {
+    // 게임이 준비될 때까지 대기
+    if (!gameReady || !gameRef.current) {
+      console.log('⏳ 게임이 아직 준비되지 않아 키보드 리스너 대기 중... gameReady:', gameReady)
+      return
+    }
+
+    console.log('🎮 키보드 이벤트 리스너 등록 시작')
+    
     const handleKeyDown = (e: KeyboardEvent) => {
       console.log('🎮 키 입력:', e.key, 'gameRef:', !!gameRef.current, 'gameOver:', gameRef.current?.gameOver)
       
@@ -166,13 +176,14 @@ export default function Game({ onBack }: GameProps) {
       }
     }
 
-    console.log('🎮 키보드 이벤트 리스너 등록')
+    console.log('✅ 키보드 이벤트 리스너 등록 완료!')
     document.addEventListener('keydown', handleKeyDown)
+    
     return () => {
       console.log('🎮 키보드 이벤트 리스너 제거')
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [])
+  }, [gameReady])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
