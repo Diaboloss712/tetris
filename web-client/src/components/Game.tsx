@@ -43,17 +43,24 @@ export default function Game({ onBack }: GameProps) {
         }
         break
       case 'game_state_update':
-        if (data.game_state && !isSolo) {
-          // 다른 플레이어들의 게임 상태 업데이트
-          setOtherPlayersData(prev => ({
-            ...prev,
-            [data.player_id]: {
-              grid: data.game_state.grid,
-              score: data.game_state.score,
-              lines: data.game_state.lines,
-              combo: data.game_state.combo
+        // 서버가 모든 플레이어 상태를 game_states 객체로 보냄
+        if (data.game_state && data.game_state.game_states && !isSolo) {
+          const newPlayersData: Record<string, any> = {}
+          
+          // 자신을 제외한 다른 플레이어들의 상태만 저장
+          Object.entries(data.game_state.game_states).forEach(([pid, state]: [string, any]) => {
+            if (pid !== playerId) {
+              newPlayersData[pid] = {
+                grid: state.grid,
+                score: state.score,
+                lines: state.lines,
+                combo: state.combo
+              }
             }
-          }))
+          })
+          
+          console.log('📊 게임 상태 업데이트:', Object.keys(newPlayersData).length, '명')
+          setOtherPlayersData(newPlayersData)
         }
         break
       case 'receive_attack':
@@ -93,7 +100,7 @@ export default function Game({ onBack }: GameProps) {
     
     console.log(`✅ 공격 전송: ${lines}줄 → ${target}`)
     wsRef.current.send(JSON.stringify({
-      type: 'send_attack',
+      type: 'attack',  // 서버가 'attack' 타입을 기대함
       target_id: target,
       lines,
       combo
@@ -346,6 +353,36 @@ export default function Game({ onBack }: GameProps) {
     const interval = setInterval(updateUI, 50)
     return () => clearInterval(interval)
   }, [isSolo])
+
+  // 다른 플레이어 그리드 렌더링
+  useEffect(() => {
+    if (isSolo) return
+
+    const colors = ['#00ffff', '#ffff00', '#ff00ff', '#ffa500', '#0000ff', '#00ff00', '#ff0000']
+    
+    Object.entries(otherPlayersData).forEach(([playerId, data]: [string, any]) => {
+      const canvas = document.getElementById(`grid-${playerId}`) as HTMLCanvasElement
+      if (!canvas || !data.grid) return
+      
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      
+      // 배경 클리어
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      
+      // 그리드 그리기
+      const blockSize = 5
+      for (let y = 0; y < data.grid.length; y++) {
+        for (let x = 0; x < data.grid[y].length; x++) {
+          if (data.grid[y][x]) {
+            ctx.fillStyle = colors[(data.grid[y][x] - 1) % colors.length]
+            ctx.fillRect(x * blockSize, y * blockSize, blockSize - 1, blockSize - 1)
+          }
+        }
+      }
+    })
+  }, [otherPlayersData, isSolo])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
@@ -459,28 +496,6 @@ export default function Game({ onBack }: GameProps) {
                   width={100}
                   height={200}
                   className={`bg-black rounded ${layout.size}`}
-                  ref={(canvas) => {
-                    if (canvas && playerData.grid) {
-                      const ctx = canvas.getContext('2d')
-                      if (ctx) {
-                        // 그리드 그리기
-                        const blockSize = 5
-                        const colors = ['#00ffff', '#ffff00', '#ff00ff', '#ffa500', '#0000ff', '#00ff00', '#ff0000']
-                        
-                        ctx.fillStyle = '#000'
-                        ctx.fillRect(0, 0, canvas.width, canvas.height)
-                        
-                        for (let y = 0; y < playerData.grid.length; y++) {
-                          for (let x = 0; x < playerData.grid[y].length; x++) {
-                            if (playerData.grid[y][x]) {
-                              ctx.fillStyle = colors[(playerData.grid[y][x] - 1) % colors.length]
-                              ctx.fillRect(x * blockSize, y * blockSize, blockSize - 1, blockSize - 1)
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }}
                 />
                 <div className="flex justify-between text-white text-xs mt-1">
                   <span>{playerData.score}점</span>
