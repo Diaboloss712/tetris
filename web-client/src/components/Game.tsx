@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useGameStore } from '../store/gameStore'
 
 interface GameProps {
@@ -8,7 +8,6 @@ interface GameProps {
 export default function Game({ onBack }: GameProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const gameRef = useRef<any>(null)
-  const [gameReady, setGameReady] = useState(false)
   const { currentRoom, playerId, currentTarget, isSolo, itemMode } = useGameStore()
   
   // 자신 제외한 플레이어 목록
@@ -25,86 +24,8 @@ export default function Game({ onBack }: GameProps) {
   
   const layout = getGridLayout(playerCount)
   
-  // 게임 로직 초기화: 페이지당 한 번만 game.js 로드, 이미 로드됐다면 재사용
-  useEffect(() => {
-    const anyWindow = window as any
-
-    const initGame = () => {
-      // 캔버스가 DOM에 확실히 준비될 때까지 기다림
-      const canvas = document.getElementById('game-canvas')
-      console.log('🔍 initGame 호출 - canvas:', canvas, 'canvasRef.current:', canvasRef.current, 'TetrisGame:', anyWindow.TetrisGame)
-      
-      if (!canvas) {
-        console.warn('⏳ 캔버스가 아직 준비되지 않았습니다. 재시도 중...')
-        setTimeout(initGame, 100)
-        return
-      }
-
-      if (!anyWindow.TetrisGame) {
-        console.error('❌ TetrisGame 클래스가 로드되지 않았습니다!')
-        return
-      }
-
-      if (!canvasRef.current) {
-        console.error('❌ canvasRef.current가 null입니다!')
-        return
-      }
-
-      try {
-        console.log('🎮 TetrisGame 생성 시작...')
-        gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
-        if (gameRef.current) {
-          gameRef.current.itemMode = itemMode
-        }
-        console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
-        setGameReady(true) // 게임 준비 완료 플래그 설정
-      } catch (error) {
-        console.error('❌ 게임 초기화 실패:', error)
-      }
-    }
-
-    if (anyWindow.TetrisGame) {
-      // 이미 스크립트가 로드된 경우, 약간의 지연 후 게임 인스턴스 생성 (DOM 준비 보장)
-      setTimeout(initGame, 50)
-    } else {
-      // 아직 로드되지 않았다면 한 번만 로드
-      const script = document.createElement('script')
-      script.src = `/game.js?v=${Date.now()}`  // 캐시 방지
-      script.async = true
-      script.onload = () => {
-        console.log('✅ game.js 로드 완료, window.TetrisGame:', anyWindow.TetrisGame)
-        setTimeout(initGame, 50)  // DOM 준비를 위한 짧은 지연
-      }
-      script.onerror = () => {
-        console.error('❌ game.js 로드 실패. public 폴더에 game.js 파일이 있는지 확인하세요.')
-      }
-      document.body.appendChild(script)
-    }
-
-    return () => {
-      // 스크립트는 그대로 두고, 게임 인스턴스만 정리
-      if (gameRef.current && gameRef.current.stopGame) {
-        gameRef.current.stopGame()
-      }
-      gameRef.current = null
-    }
-  }, [])
-
-  // 아이템 모드 변경 시 인스턴스에 반영
-  useEffect(() => {
-    if (gameRef.current) {
-      gameRef.current.itemMode = itemMode
-    }
-  }, [itemMode])
-
-  // 키보드 컨트롤
-  useEffect(() => {
-    // 게임이 준비될 때까지 대기
-    if (!gameReady || !gameRef.current) {
-      console.log('⏳ 게임이 아직 준비되지 않아 키보드 리스너 대기 중... gameReady:', gameReady)
-      return
-    }
-
+  // 키보드 컨트롤 설정 (v1 방식)
+  const setupKeyboardControls = () => {
     console.log('🎮 키보드 이벤트 리스너 등록 시작')
     
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -178,12 +99,81 @@ export default function Game({ onBack }: GameProps) {
 
     console.log('✅ 키보드 이벤트 리스너 등록 완료!')
     document.addEventListener('keydown', handleKeyDown)
-    
-    return () => {
-      console.log('🎮 키보드 이벤트 리스너 제거')
-      document.removeEventListener('keydown', handleKeyDown)
+  }
+  
+  // 게임 로직 초기화: 페이지당 한 번만 game.js 로드, 이미 로드됐다면 재사용
+  useEffect(() => {
+    const anyWindow = window as any
+
+    const initGame = () => {
+      // 캔버스가 DOM에 확실히 준비될 때까지 기다림
+      const canvas = document.getElementById('game-canvas')
+      console.log('🔍 initGame 호출 - canvas:', canvas, 'canvasRef.current:', canvasRef.current, 'TetrisGame:', anyWindow.TetrisGame)
+      
+      if (!canvas) {
+        console.warn('⏳ 캔버스가 아직 준비되지 않았습니다. 재시도 중...')
+        setTimeout(initGame, 100)
+        return
+      }
+
+      if (!anyWindow.TetrisGame) {
+        console.error('❌ TetrisGame 클래스가 로드되지 않았습니다!')
+        return
+      }
+
+      if (!canvasRef.current) {
+        console.error('❌ canvasRef.current가 null입니다!')
+        return
+      }
+
+      try {
+        console.log('🎮 TetrisGame 생성 시작...')
+        gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
+        if (gameRef.current) {
+          gameRef.current.itemMode = itemMode
+        }
+        console.log('✅ 테트리스 게임 시작! (아이템 모드:', itemMode, ')')
+        
+        // 게임 초기화 직후 키보드 리스너 등록 (v1 방식)
+        setupKeyboardControls()
+      } catch (error) {
+        console.error('❌ 게임 초기화 실패:', error)
+      }
     }
-  }, [gameReady])
+
+    if (anyWindow.TetrisGame) {
+      // 이미 스크립트가 로드된 경우, 약간의 지연 후 게임 인스턴스 생성 (DOM 준비 보장)
+      setTimeout(initGame, 50)
+    } else {
+      // 아직 로드되지 않았다면 한 번만 로드
+      const script = document.createElement('script')
+      script.src = `/game.js?v=${Date.now()}`  // 캐시 방지
+      script.async = true
+      script.onload = () => {
+        console.log('✅ game.js 로드 완료, window.TetrisGame:', anyWindow.TetrisGame)
+        setTimeout(initGame, 50)  // DOM 준비를 위한 짧은 지연
+      }
+      script.onerror = () => {
+        console.error('❌ game.js 로드 실패. public 폴더에 game.js 파일이 있는지 확인하세요.')
+      }
+      document.body.appendChild(script)
+    }
+
+    return () => {
+      // 스크립트는 그대로 두고, 게임 인스턴스만 정리
+      if (gameRef.current && gameRef.current.stopGame) {
+        gameRef.current.stopGame()
+      }
+      gameRef.current = null
+    }
+  }, [])
+
+  // 아이템 모드 변경 시 인스턴스에 반영
+  useEffect(() => {
+    if (gameRef.current) {
+      gameRef.current.itemMode = itemMode
+    }
+  }, [itemMode])
   
   return (
     <div className="flex justify-center items-start gap-4 p-5 min-h-screen">
