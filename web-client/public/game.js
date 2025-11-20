@@ -541,11 +541,10 @@ class TetrisGame {
         this.lockResetCount = 0;
         
         const attackLines = this.merge();
-        console.log(`🔍 hardDrop merge 완료: attackLines=${attackLines}, sendAttack=${typeof window.sendAttack}`);
         
         if (attackLines > 0) {
+            console.log(`🔍 하드드롭 공격 라인: ${attackLines}줄, sendAttack 존재:`, typeof window.sendAttack !== 'undefined');
             if (window.sendAttack) {
-                console.log(`🚀 공격 전송 (하드드롭): ${attackLines}줄`);
                 window.sendAttack(attackLines, this.combo);
             } else {
                 console.error('❌ window.sendAttack 정의되지 않음!');
@@ -1421,11 +1420,10 @@ class TetrisGame {
                 if (this.lockDelayTimer >= this.lockDelay || this.lockResetCount >= this.maxLockResets) {
                     // 블록 고정
                     const attackLines = this.merge();
-                    console.log(`🔍 merge 완료: attackLines=${attackLines}, sendAttack=${typeof window.sendAttack}, combo=${this.combo}`);
                     
                     if (attackLines > 0) {
+                        console.log(`🔍 공격 라인: ${attackLines}줄, combo: ${this.combo}, sendAttack 존재:`, typeof window.sendAttack !== 'undefined');
                         if (window.sendAttack) {
-                            console.log(`🚀 공격 전송: ${attackLines}줄`);
                             window.sendAttack(attackLines, this.combo);
                         } else {
                             console.error('❌ window.sendAttack 정의되지 않음!');

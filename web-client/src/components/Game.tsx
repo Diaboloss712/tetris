@@ -10,8 +10,14 @@ export default function Game({ onBack }: GameProps) {
   const gameRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const syncIntervalRef = useRef<any>(null)
+  const currentTargetRef = useRef<string | null>(null)
   const [otherPlayersData, setOtherPlayersData] = useState<Record<string, any>>({})
   const { currentRoom, playerId, currentTarget, isSolo, itemMode, setCurrentTarget } = useGameStore()
+  
+  // currentTarget이 변경될 때마다 ref 업데이트
+  useEffect(() => {
+    currentTargetRef.current = currentTarget
+  }, [currentTarget])
   
   // 자신 제외한 플레이어 목록
   const otherPlayers = currentRoom?.players.filter(p => p.id !== playerId) || []
@@ -30,6 +36,12 @@ export default function Game({ onBack }: GameProps) {
   // WebSocket 메시지 핸들러
   const handleWebSocketMessage = (data: any) => {
     switch (data.type) {
+      case 'game_tick':
+        // 서버 틱으로 게임 속도 동기화 (모든 플레이어 같은 속도)
+        if (gameRef.current && !gameRef.current.gameOver) {
+          gameRef.current.update(performance.now())
+        }
+        break
       case 'game_state_update':
         if (data.game_state && !isSolo) {
           // 다른 플레이어들의 게임 상태 업데이트
@@ -45,8 +57,12 @@ export default function Game({ onBack }: GameProps) {
         }
         break
       case 'receive_attack':
+        console.log('💥 공격 수신:', data)
         if (gameRef.current && typeof gameRef.current.receiveAttack === 'function') {
           gameRef.current.receiveAttack(data.lines)
+          console.log(`🎯 receiveAttack 호출: ${data.lines}줄`)
+        } else {
+          console.error('❌ receiveAttack 함수 없음')
         }
         break
       case 'target_changed':
@@ -57,11 +73,28 @@ export default function Game({ onBack }: GameProps) {
 
   // 공격 전송 함수
   const sendAttack = (lines: number, combo: number) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || isSolo) return
+    const target = currentTargetRef.current
+    console.log('🚀 sendAttack 호출:', { lines, combo, target, isSolo, wsReady: wsRef.current?.readyState === WebSocket.OPEN })
     
+    if (isSolo) {
+      console.log('⚠️ 싱글플레이 - 공격 전송 안함')
+      return
+    }
+    
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.error('❌ WebSocket 연결 없음')
+      return
+    }
+    
+    if (!target) {
+      console.warn('⚠️ 타겟 없음 - 공격 전송 안함')
+      return
+    }
+    
+    console.log(`✅ 공격 전송: ${lines}줄 → ${target}`)
     wsRef.current.send(JSON.stringify({
       type: 'send_attack',
-      target_id: currentTarget,
+      target_id: target,
       lines,
       combo
     }))
@@ -179,8 +212,10 @@ export default function Game({ onBack }: GameProps) {
       if (!anyWindow.TetrisGame || !canvasRef.current) return
 
       try {
-        // 멀티플레이에서는 autoStart=true (로컬 게임 루프)
-        gameRef.current = new anyWindow.TetrisGame('game-canvas', true)
+        // 멀티플레이에서는 autoStart=false (서버 틱으로 동기화)
+        // 싱글플레이에서는 autoStart=true (로컬 루프)
+        const autoStart = isSolo
+        gameRef.current = new anyWindow.TetrisGame('game-canvas', autoStart)
         if (gameRef.current) {
           gameRef.current.itemMode = itemMode
         }
@@ -200,6 +235,13 @@ export default function Game({ onBack }: GameProps) {
           
           ws.onopen = () => {
             console.log('✅ WebSocket 연결됨')
+            
+            // 초기 타겟 설정 (첫 번째 플레이어)
+            if (!currentTarget && otherPlayers.length > 0) {
+              const firstTarget = otherPlayers[0].id
+              setCurrentTarget(firstTarget)
+              console.log(`🎯 초기 타겟 설정: ${firstTarget}`)
+            }
           }
           
           ws.onmessage = (event) => {
