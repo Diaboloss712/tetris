@@ -146,12 +146,6 @@ class LobbyManager {
                 this.updateTargetDisplay();
                 console.log(`🎯 타겟 변경됨: ${this.currentTarget ? this.getPlayerName(this.currentTarget) : '없음'}`);
                 break;
-            case 'game_tick':
-                // 서버에서 게임 틱 수신 - 비활성 탭에서도 동작
-                if (window.game && !window.game.gameOver) {
-                    window.game.update(performance.now());
-                }
-                break;
             case 'game_state_update':
                 // 다른 플레이어의 미니 그리드 업데이트
                 if (this.currentRoom && !this.isSoloMode && data.game_state) {
