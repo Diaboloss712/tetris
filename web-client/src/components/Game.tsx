@@ -146,7 +146,13 @@ export default function Game({ onBack }: GameProps) {
   // 키보드 컨트롤 설정
   const setupKeyboardControls = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!gameRef.current || gameRef.current.gameOver) return
+      // 게임 오버 시 모든 입력 차단
+      if (!gameRef.current || gameRef.current.gameOver) {
+        if (gameRef.current && gameRef.current.gameOver) {
+          e.preventDefault()
+        }
+        return
+      }
 
       switch (e.key) {
         case 'ArrowLeft':
@@ -225,6 +231,11 @@ export default function Game({ onBack }: GameProps) {
         gameRef.current = new anyWindow.TetrisGame('game-canvas', autoStart)
         if (gameRef.current) {
           gameRef.current.itemMode = itemMode
+        }
+        
+        // 초기 화면 그리기 (블럭이 보이도록)
+        if (gameRef.current) {
+          gameRef.current.draw()
         }
         
         // 전역 공격 함수 등록

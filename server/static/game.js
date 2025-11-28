@@ -87,6 +87,9 @@ class TetrisGame {
         this.drawNextPiece();
         this.drawHeldPiece();
         
+        // 초기 화면 렌더링 (블럭이 보이도록)
+        this.draw();
+        
         // 자동 시작이 활성화된 경우에만 게임 루프 시작
         if (this.autoStart) {
             this.startGameLoop();

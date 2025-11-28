@@ -589,6 +589,9 @@ class LobbyManager {
         // 멀티플레이에서는 autoStart=false (서버 틱으로 속도 동기화)
         window.game = new TetrisGame('game-canvas', false);
         window.game.itemMode = itemMode;
+        
+        // 초기 화면 그리기 (블럭이 보이도록)
+        window.game.draw();
 
         document.getElementById('items-section').style.display = itemMode ? 'block' : 'none';
         document.getElementById('current-target-display').style.display = 'block';
@@ -614,7 +617,7 @@ class LobbyManager {
                 clearInterval(this.syncInterval); // 동기화 중지
                 console.log('💀 게임 오버 감지!');
                 this.handleGameOver();
-                this.startSpectating(); // 관전 모드 시작
+                // 자동 관전 제거 - 사용자가 버튼으로 선택하도록
             }
         }, 100); // 100ms마다 동기화 및 게임 오버 체크
     }
@@ -634,7 +637,14 @@ class LobbyManager {
                 return;
             }
             
-            if (!window.game || window.game.gameOver || this.keysDown[e.key]) return;
+            // 게임이 없거나, 게임 오버거나, 이미 눌린 키면 무시
+            if (!window.game || window.game.gameOver || this.keysDown[e.key]) {
+                // 게임 오버 시 모든 입력 무시 (하드드랍 포함)
+                if (window.game && window.game.gameOver) {
+                    e.preventDefault();
+                }
+                return;
+            }
             this.keysDown[e.key] = true;
 
             const handleMove = (direction) => {
@@ -692,10 +702,11 @@ class LobbyManager {
 
     sendGameInput(input) {
         // 멀티플레이와 싱글플레이 모두 로컬 게임 실행
-        if (!window.game) return;
+        if (!window.game || window.game.gameOver) return;
         
         // 블록이 없으면 조작 불가 (merge 중)
         if (!window.game.currentPiece) {
+            console.warn('⚠️ currentPiece가 null입니다. merge 중일 수 있습니다.');
             return;
         }
         
@@ -706,6 +717,7 @@ class LobbyManager {
                 if (window.game.moveDown()) {
                     window.game.score += 1; // 소프트 드롭 점수
                 }
+                window.game.draw(); // 화면 업데이트
                 break;
             case 'rotate_cw': window.game.rotate(true); break;
             case 'rotate_ccw': window.game.rotate(false); break;
